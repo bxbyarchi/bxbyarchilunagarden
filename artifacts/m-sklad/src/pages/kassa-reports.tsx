@@ -89,7 +89,7 @@ export default function KassaReports() {
       <div className="space-y-6 no-print">
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-kassa-reports">Отчёты по кассам</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Выручка, возвраты и продажи по ярмарке за период.</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Выручка, возвраты и продажи по ресторану за период.</p>
         </div>
 
         <Card>
@@ -176,10 +176,10 @@ export default function KassaReports() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2">По домикам<Badge variant="secondary" className="ml-auto">{summary.byHouse.length}</Badge></CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2">По точкам продаж<Badge variant="secondary" className="ml-auto">{summary.byHouse.length}</Badge></CardTitle></CardHeader>
               <CardContent className="p-0 overflow-x-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Домик</TableHead><TableHead className="text-right">Продаж</TableHead><TableHead className="text-right">Выручка</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>Точка продаж</TableHead><TableHead className="text-right">Продаж</TableHead><TableHead className="text-right">Выручка</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {!summary.byHouse.length ? <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">Нет данных</TableCell></TableRow> :
                       summary.byHouse.map((h) => <TableRow key={h.houseId}><TableCell>{h.houseName}<span className="text-muted-foreground text-xs ml-1.5">{h.locationName}</span></TableCell><TableCell className="text-right">{h.salesCount}</TableCell><TableCell className="text-right font-medium">{money(h.totalSales)}</TableCell></TableRow>)}

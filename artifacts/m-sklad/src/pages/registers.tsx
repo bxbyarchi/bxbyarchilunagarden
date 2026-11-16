@@ -22,7 +22,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const registerSchema = z.object({
   name: z.string().min(1, "Название обязательно"),
-  houseId: z.string().min(1, "Домик обязателен"),
+  houseId: z.string().min(1, "Точка продаж обязательна"),
 });
 type RegisterFormData = z.infer<typeof registerSchema>;
 
@@ -105,9 +105,9 @@ export default function Registers() {
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {activeHouse ? `Кассы домика «${activeHouse.name}»` : "Кассы"}
+            {activeHouse ? `Кассы точки продаж «${activeHouse.name}»` : "Кассы"}
           </h1>
-          <p className="text-muted-foreground text-sm">Точки расчёта на ярмарке.</p>
+          <p className="text-muted-foreground text-sm">Кассы в точках продаж ресторана.</p>
         </div>
         {canManage && (
           <Button onClick={openCreate} data-testid="btn-create-register">
@@ -129,9 +129,9 @@ export default function Registers() {
               </Select>
             )}
             <Select value={houseFilter || "all"} onValueChange={(v) => setHouseFilter(v === "all" ? "" : v)}>
-              <SelectTrigger className="w-[200px]" data-testid="select-filter-register-house"><SelectValue placeholder="Все домики" /></SelectTrigger>
+              <SelectTrigger className="w-[200px]" data-testid="select-filter-register-house"><SelectValue placeholder="Все точки продаж" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Все домики</SelectItem>
+                <SelectItem value="all">Все точки продаж</SelectItem>
                 {houses?.map((h) => <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -146,7 +146,7 @@ export default function Registers() {
             <TableHeader>
               <TableRow>
                 <TableHead>Название</TableHead>
-                <TableHead>Домик</TableHead>
+                <TableHead>Точка продаж</TableHead>
                 <TableHead>Площадка</TableHead>
                 <TableHead>Статус</TableHead>
                 <TableHead className="text-right">Действия</TableHead>
@@ -197,7 +197,7 @@ export default function Registers() {
                 <FormItem><FormLabel>Название *</FormLabel><FormControl><Input placeholder="Касса 1" {...field} data-testid="input-register-name" /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="houseId" render={({ field }) => (
-                <FormItem><FormLabel>Домик *</FormLabel>
+                <FormItem><FormLabel>Точка продаж *</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange} disabled={!!editing}>
                     <FormControl><SelectTrigger data-testid="select-register-house"><SelectValue placeholder="Выбрать" /></SelectTrigger></FormControl>
                     <SelectContent>

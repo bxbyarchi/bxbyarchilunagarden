@@ -1,9 +1,11 @@
-import { pgTable, serial, integer, text, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, numeric, timestamp, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { shiftsTable } from "./shifts";
 import { registersTable } from "./registers";
 import { productsTable } from "./products";
+import { itemsTable } from "./items";
+import { locationsTable } from "./locations";
 
 export const paymentMethods = ["cash", "card"] as const;
 export const saleStatus = ["completed", "returned", "partially_returned"] as const;
@@ -46,8 +48,32 @@ export const returnsTable = pgTable("returns", {
   quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   reason: text("reason").notNull(),
+  // Смена, в которой оформлен возврат (может отличаться от смены продажи).
+  shiftId: integer("shift_id").references(() => shiftsTable.id),
+  restocked: boolean("restocked").notNull().default(false),
   createdByClerkId: text("created_by_clerk_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type Return = typeof returnsTable.$inferSelect;
+
+/**
+ * Складские движения по продажам: что списано за позицию чека (qty > 0) и что
+ * возвращено на склад при возврате (qty < 0). Количество — в единице позиции
+ * склада, unitCost — её цена на момент движения (для фактической себестоимости).
+ */
+export const saleStockMovementsTable = pgTable("sale_stock_movements", {
+  id: serial("id").primaryKey(),
+  saleItemId: integer("sale_item_id").notNull().references(() => saleItemsTable.id),
+  returnId: integer("return_id").references(() => returnsTable.id),
+  itemId: integer("item_id").notNull().references(() => itemsTable.id),
+  locationId: integer("location_id").notNull().references(() => locationsTable.id),
+  qty: numeric("qty", { precision: 12, scale: 4 }).notNull(),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 4 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  saleItemIdx: index("sale_stock_movements_sale_item_idx").on(t.saleItemId),
+  itemDateIdx: index("sale_stock_movements_item_date_idx").on(t.itemId, t.createdAt),
+}));
+
+export type SaleStockMovement = typeof saleStockMovementsTable.$inferSelect;

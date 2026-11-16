@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/requireAuth";
-import { db, itemsTable, categoriesTable, warehouseStockTable, locationsTable, techCardIngredientsTable, techCardsTable } from "@workspace/db";
+import { db, itemsTable, categoriesTable, warehouseStockTable, locationsTable, techCardIngredientsTable, techCardsTable, saleStockMovementsTable, productsTable, productionLinesTable } from "@workspace/db";
 import { eq, sql, and, ilike, asc } from "drizzle-orm";
 import { logAudit } from "../lib/auditLogger";
 import { requireRole } from "../middleware/rbac";
@@ -134,6 +134,10 @@ router.delete("/items/:id", requireAuth(), requireRole("warehouse_chief"), async
     .innerJoin(techCardsTable, eq(techCardIngredientsTable.techCardId, techCardsTable.id))
     .where(eq(techCardIngredientsTable.itemId, id));
   if (usedIn.length) { res.status(409).json({ error: `Позиция используется в тех-картах: ${[...new Set(usedIn.map((u) => u.name))].join(", ")}` }); return; }
+  const [sold] = await db.select({ id: saleStockMovementsTable.id }).from(saleStockMovementsTable).where(eq(saleStockMovementsTable.itemId, id)).limit(1);
+  const [produced] = await db.select({ id: productionLinesTable.id }).from(productionLinesTable).where(eq(productionLinesTable.itemId, id)).limit(1);
+  if (sold || produced) { res.status(409).json({ error: "По позиции уже были продажи или производство — удалить её нельзя, обнулите остаток или переименуйте" }); return; }
+  await db.update(productsTable).set({ itemId: null }).where(eq(productsTable.itemId, id));
   const [row] = await db.delete(itemsTable).where(eq(itemsTable.id, id)).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   await logAudit({ action: "delete", entityType: "item", entityId: id, clerkUserId: req.auth?.userId });

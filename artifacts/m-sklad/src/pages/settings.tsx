@@ -153,7 +153,7 @@ function DemoDataSection() {
   const [result, setResult] = useState<Record<string, number> | null>(null);
 
   function run() {
-    if (!confirm("Заполнить систему демо-данными (склады, домики, кассы, продажи)? Действие добавляет данные, ничего не удаляет.")) return;
+    if (!confirm("Заполнить систему демо-данными (склады, точки продаж, кассы, продажи)? Действие добавляет данные, ничего не удаляет.")) return;
     seed.mutate(undefined, {
       onSuccess: (data) => { setResult((data as { summary: Record<string, number> }).summary); toast({ title: "Демо-данные добавлены" }); },
       onError: () => toast({ title: "Ошибка", variant: "destructive" }),
@@ -164,7 +164,7 @@ function DemoDataSection() {
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4" />Демо-данные</CardTitle>
-        <CardDescription>Заполняет систему тестовыми данными для проверки: домики и кассы на всех площадках, склад, сотрудники, смены и продажи. Повторный запуск не дублирует уже созданное — только добавляет недостающее.</CardDescription>
+        <CardDescription>Заполняет систему тестовыми данными для проверки: точки продаж и кассы на всех площадках, склад, сотрудники, смены и продажи. Повторный запуск не дублирует уже созданное — только добавляет недостающее.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Button onClick={run} disabled={seed.isPending}><Sparkles className="mr-2 h-4 w-4" />{seed.isPending ? "Заполняю..." : "Заполнить демо-данными"}</Button>

@@ -28,7 +28,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Журнал аудита", href: "/audit-log", icon: History, roles: ["super_admin"], testId: "audit-log" },
   ];
   const venueNavigation = [
-    { name: "Домики", href: "/houses", icon: Home, roles: ["super_admin", "location_admin"], testId: "houses" },
+    { name: "Точки продаж", href: "/houses", icon: Home, roles: ["super_admin", "location_admin"], testId: "houses" },
     { name: "Смены", href: "/shifts", icon: Unlock, roles: ["super_admin", "location_admin", "cashier"], testId: "shifts" },
     { name: "Аналитика касс", href: "/kassa-dashboard", icon: PieChart, roles: ["super_admin", "location_admin"], testId: "kassa-dashboard" },
     { name: "Отчёты касс", href: "/kassa-reports", icon: FileBarChart, roles: ["super_admin", "location_admin"], testId: "kassa-reports" },

@@ -1,9 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/requireAuth";
 import { requireRole } from "../middleware/rbac";
-import { db, techCardsTable, techCardIngredientsTable, itemsTable, locationsTable } from "@workspace/db";
+import { db, techCardsTable, techCardIngredientsTable, itemsTable, locationsTable, productsTable } from "@workspace/db";
 import { loadGraph, departmentStock } from "../lib/techCardGraph";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { logAudit } from "../lib/auditLogger";
 import {
   UNITS, normalizeUnit, unitsCompatible, costCard, pricing, rawRequirements, portionsAvailable,
@@ -209,6 +209,8 @@ router.delete("/tech-cards/:id", requireAuth(), requireRole("manager"), async (r
     .innerJoin(techCardsTable, eq(techCardIngredientsTable.techCardId, techCardsTable.id))
     .where(eq(techCardIngredientsTable.semiCardId, id));
   if (users.length) { res.status(409).json({ error: `Полуфабрикат используется в: ${[...new Set(users.map((u) => u.name))].join(", ")}` }); return; }
+  const onMenu = await db.select({ name: productsTable.name }).from(productsTable).where(and(eq(productsTable.techCardId, id), eq(productsTable.isActive, true))).limit(5);
+  if (onMenu.length) { res.status(409).json({ error: `Тех-карта стоит в меню кассы (${onMenu.map((m) => m.name).join(", ")}) — сначала уберите её из меню` }); return; }
   const [deleted] = await db.delete(techCardsTable).where(eq(techCardsTable.id, id)).returning({ name: techCardsTable.name });
   if (!deleted) { res.status(404).json({ error: "Тех-карта не найдена" }); return; }
   await logAudit({ action: "delete", entityType: "tech-card", entityId: id, clerkUserId: req.auth?.userId, details: deleted.name });

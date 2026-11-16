@@ -44,7 +44,7 @@ router.post("/registers", requireAuth(), requireVenueRole("location_admin"), asy
   if (!name) { res.status(400).json({ error: "name required" }); return; }
   const hId = Number(houseId);
   const house = hId ? await db.query.housesTable.findFirst({ where: eq(housesTable.id, hId) }) : null;
-  if (!house) { res.status(400).json({ error: "Некорректный домик" }); return; }
+  if (!house) { res.status(400).json({ error: "Некорректная точка продаж" }); return; }
   if (!canAccessVenueLocation(scope, house.locationId)) { res.status(403).json({ error: "Нет доступа к этой площадке" }); return; }
   const [row] = await db.insert(registersTable).values({ name, houseId: hId, isActive: isActive ?? true }).returning();
   await logAudit({ action: "create", entityType: "register", entityId: row.id, clerkUserId: req.auth?.userId });

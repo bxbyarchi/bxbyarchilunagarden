@@ -37,6 +37,7 @@ router.get("/shifts", requireAuth(), requireVenueRole("cashier"), async (req: Re
       totalSalesCash: shiftsTable.totalSalesCash,
       totalSalesCard: shiftsTable.totalSalesCard,
       totalReturns: shiftsTable.totalReturns,
+      totalReturnsCash: shiftsTable.totalReturnsCash,
       totalCollected: shiftsTable.totalCollected,
       totalDeposited: shiftsTable.totalDeposited,
       notes: shiftsTable.notes,
@@ -99,7 +100,7 @@ router.patch("/shifts/:id/close", requireAuth(), requireVenueRole("cashier"), as
   if (!canAccessVenueLocation(scope, locationId)) { res.status(403).json({ error: "Нет доступа к этой смене" }); return; }
   if (shift.status !== "open") { res.status(409).json({ error: "Смена уже закрыта" }); return; }
 
-  const expectedCash = Number(shift.openingCash) + Number(shift.totalSalesCash) - Number(shift.totalReturns) - Number(shift.totalCollected) + Number(shift.totalDeposited);
+  const expectedCash = Number(shift.openingCash) + Number(shift.totalSalesCash) - Number(shift.totalReturnsCash) - Number(shift.totalCollected) + Number(shift.totalDeposited);
   const counted = Number(closingCashCounted);
   const cashDifference = counted - expectedCash;
 

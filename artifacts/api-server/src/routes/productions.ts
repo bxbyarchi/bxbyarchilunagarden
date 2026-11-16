@@ -9,30 +9,16 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { logAudit } from "../lib/auditLogger";
 import { getWarehouseScope, canAccessLocation, isWarehouseAdmin } from "../lib/warehouseScope";
 import { loadGraph } from "../lib/techCardGraph";
+import { addStock, type Tx } from "../lib/stock";
 import { convert, rawRequirements, stockUnitFor, weightedPrice, type ItemInfo } from "../lib/techCardMath";
 
 const router: IRouter = Router();
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const SEMI_CATEGORY = { name: "Полуфабрикаты", slug: "polufabrikaty" };
 const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
 
 class HttpError extends Error {
   constructor(public status: number, message: string, public extra?: Record<string, unknown>) { super(message); }
-}
-
-/** Keeps items.currentStock = sum of per-department stock, like receipts do. */
-async function refreshItemTotal(tx: Tx, itemId: number) {
-  await tx.update(itemsTable).set({
-    currentStock: sql`(SELECT COALESCE(SUM(CAST(${warehouseStockTable.currentStock} AS DECIMAL)), 0) FROM ${warehouseStockTable} WHERE ${warehouseStockTable.itemId} = ${itemId})`,
-  }).where(eq(itemsTable.id, itemId));
-}
-
-/** Adds (or with a negative delta removes) stock of one item in one department. */
-async function addStock(tx: Tx, itemId: number, locationId: number, delta: number) {
-  await tx.insert(warehouseStockTable).values({ itemId, locationId, currentStock: String(delta) })
-    .onConflictDoUpdate({ target: [warehouseStockTable.itemId, warehouseStockTable.locationId], set: { currentStock: sql`CAST(${warehouseStockTable.currentStock} AS DECIMAL) + ${delta}` } });
-  await refreshItemTotal(tx, itemId);
 }
 
 /** Locks the stock rows of these items in a department and returns itemId → qty. */

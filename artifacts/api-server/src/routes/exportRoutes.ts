@@ -518,7 +518,7 @@ router.get("/export/kassa", requireAuth(), requireVenueRole("location_admin"), a
   const shiftsSheet = wb.addWorksheet("Смены");
   styleSheet(shiftsSheet, [
     { header: "Касса", key: "registerName", width: 16 },
-    { header: "Домик", key: "houseName", width: 18 },
+    { header: "Точка продаж", key: "houseName", width: 18 },
     { header: "Площадка", key: "locationName", width: 16 },
     { header: "Кассир", key: "cashierName", width: 18 },
     { header: "Статус", key: "status", width: 12 },
@@ -543,7 +543,7 @@ router.get("/export/kassa", requireAuth(), requireVenueRole("location_admin"), a
   styleSheet(salesSheet, [
     { header: "Дата", key: "date", width: 12 },
     { header: "Касса", key: "registerName", width: 14 },
-    { header: "Домик", key: "houseName", width: 16 },
+    { header: "Точка продаж", key: "houseName", width: 16 },
     { header: "Площадка", key: "locationName", width: 14 },
     { header: "Товар", key: "itemName", width: 22 },
     { header: "Кол-во", key: "quantity", width: 10, format: "integer" },

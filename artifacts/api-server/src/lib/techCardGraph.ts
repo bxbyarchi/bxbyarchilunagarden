@@ -15,7 +15,7 @@ export async function loadGraph() {
   const items = new Map<number, ItemInfo>(itemRows.map((i) => [i.id, { id: i.id, name: i.name, unit: i.unit, pricePerUnit: Number(i.pricePerUnit) }]));
   const cards = new Map<number, CardInfo>();
   for (const c of cardRows) {
-    cards.set(c.id, { id: c.id, name: c.name, kind: c.kind, outputQty: Number(c.outputQty), outputUnit: c.outputUnit, salePrice: c.salePrice == null ? null : Number(c.salePrice), outputItemId: c.outputItemId, ingredients: [] });
+    cards.set(c.id, { id: c.id, name: c.name, kind: c.kind, outputQty: Number(c.outputQty), outputUnit: c.outputUnit, salePrice: c.salePrice == null ? null : Number(c.salePrice), outputItemId: c.outputItemId, departmentId: c.departmentId, ingredients: [] });
   }
   for (const r of ingRows) {
     cards.get(r.techCardId)?.ingredients.push({
@@ -33,3 +33,11 @@ export async function departmentStock(departmentId: number | null): Promise<Map<
   return new Map(rows.map((r) => [r.itemId, Number(r.qty)]));
 }
 
+
+/** Adds stock items that aren't referenced by any tech card (e.g. bottled drinks sold as is). */
+export async function loadMoreItems(items: Map<number, ItemInfo>, ids: number[]) {
+  const missing = [...new Set(ids)].filter((id) => !items.has(id));
+  if (!missing.length) return;
+  const rows = await db.select({ id: itemsTable.id, name: itemsTable.name, unit: itemsTable.unit, pricePerUnit: itemsTable.pricePerUnit }).from(itemsTable).where(inArray(itemsTable.id, missing));
+  for (const r of rows) items.set(r.id, { id: r.id, name: r.name, unit: r.unit, pricePerUnit: Number(r.pricePerUnit) });
+}

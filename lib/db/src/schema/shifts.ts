@@ -17,6 +17,8 @@ export const shiftsTable = pgTable("shifts", {
   totalSalesCash: numeric("total_sales_cash", { precision: 12, scale: 2 }).notNull().default("0"),
   totalSalesCard: numeric("total_sales_card", { precision: 12, scale: 2 }).notNull().default("0"),
   totalReturns: numeric("total_returns", { precision: 12, scale: 2 }).notNull().default("0"),
+  // Часть возвратов, выданная наличными из этой кассы (только она уменьшает ожидаемые наличные).
+  totalReturnsCash: numeric("total_returns_cash", { precision: 12, scale: 2 }).notNull().default("0"),
   totalCollected: numeric("total_collected", { precision: 12, scale: 2 }).notNull().default("0"),
   totalDeposited: numeric("total_deposited", { precision: 12, scale: 2 }).notNull().default("0"),
   notes: text("notes"),

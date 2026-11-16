@@ -47,12 +47,12 @@ type ShiftRow = {
   id: number; registerId: number; houseId?: number; registerName: string; houseName: string; locationName?: string | null;
   cashierName: string; status: "open" | "closed"; openingCash: string;
   closingCashCounted?: string | null; expectedCash?: string | null; cashDifference?: string | null;
-  totalSalesCash: string; totalSalesCard: string; totalReturns: string;
+  totalSalesCash: string; totalSalesCard: string; totalReturns: string; totalReturnsCash?: string;
   totalCollected: string; totalDeposited: string;
   openedAt: string; closedAt?: string | null;
 };
 
-type ProductRow = { id: number; houseId: number; category: string; name: string; price: string; isActive: boolean; sortOrder: number };
+type ProductRow = { id: number; houseId: number; category: string; name: string; price: string; isActive: boolean; sortOrder: number; barcode?: string | null };
 type CartItem = { productId?: number; name: string; quantity: string; pricePerUnit: string };
 
 type ReceiptData = {
@@ -116,7 +116,7 @@ export default function Shifts() {
         setOpenDialogOpen(false);
         openForm.reset({ registerId: "", cashierName: "", openingCash: "0" });
       },
-      onError: (e: unknown) => toast({ title: "Ошибка", description: e instanceof Error ? e.message : undefined, variant: "destructive" }),
+      onError: (e: unknown) => toast({ title: "Ошибка", description: (e as { data?: { error?: string } })?.data?.error, variant: "destructive" }),
     });
   }
 
@@ -252,7 +252,10 @@ function ShiftWorkSheet({ shift, onClose, onClosedShift }: { shift: ShiftRow; on
   const closeShift = useCloseShift();
   const createMovement = useCreateCashMovement();
 
+  const { user: me } = useCurrentUser();
+  const canFreePrice = me?.role === "super_admin" || me?.role === "location_admin";
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [scan, setScan] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualRow, setManualRow] = useState<CartItem>({ name: "", quantity: "1", pricePerUnit: "" });
@@ -279,6 +282,18 @@ function ShiftWorkSheet({ shift, onClose, onClosedShift }: { shift: ShiftRow; on
       return [...prev, { productId: p.id, name: p.name, quantity: "1", pricePerUnit: p.price }];
     });
   }
+  /** Barcode scanners type the code and press Enter; a name fragment works too. */
+  function handleScan() {
+    const code = scan.trim();
+    if (!code) return;
+    const list = (products as ProductRow[] | undefined) ?? [];
+    const byCode = list.find((p) => p.barcode && p.barcode === code);
+    const byName = byCode ? [] : list.filter((p) => p.name.toLowerCase().includes(code.toLowerCase()));
+    const found = byCode ?? (byName.length === 1 ? byName[0] : undefined);
+    if (found) { addProductToCart(found); setScan(""); return; }
+    toast({ title: byName.length > 1 ? `Найдено ${byName.length} позиций — уточните` : `Не найдено: ${code}`, variant: "destructive" });
+  }
+
   function changeCartQty(idx: number, delta: number) {
     setCart((prev) => prev.map((r, i) => {
       if (i !== idx) return r;
@@ -308,20 +323,21 @@ function ShiftWorkSheet({ shift, onClose, onClosedShift }: { shift: ShiftRow; on
       .map((r) => ({ productId: r.productId, name: r.name.trim(), quantity: Number(r.quantity), pricePerUnit: Number(r.pricePerUnit) }));
     if (!items.length) { toast({ title: "Добавьте хотя бы одну позицию", variant: "destructive" }); return; }
     createSale.mutate({ data: { shiftId: shift.id, paymentMethod, items, discountPercent: discPct || undefined, discountReason: discPct > 0 ? discountReason.trim() : undefined } }, {
-      onSuccess: (created) => {
+      onSuccess: (createdRaw) => {
+        const created = createdRaw as unknown as { id: number; createdAt?: string; subtotalAmount: string; discountPercent: string; discountAmount: string; totalAmount: string; items?: Array<{ name: string; quantity: string; pricePerUnit: string }> };
         toast({ title: "Продажа оформлена" });
         setReceipt({
-          saleId: (created as { id: number }).id,
-          createdAt: (created as { createdAt?: string }).createdAt ?? new Date().toISOString(),
+          saleId: created.id,
+          createdAt: created.createdAt ?? new Date().toISOString(),
           cashierName: shift.cashierName,
           registerName: shift.registerName,
           houseName: shift.houseName,
           paymentMethod,
-          items,
-          subtotal: cartSubtotal,
-          discountPercent: discPct,
-          discountAmount,
-          total: cartTotal,
+          items: created.items ? created.items.map((it) => ({ name: it.name, quantity: Number(it.quantity), pricePerUnit: Number(it.pricePerUnit) })) : items.map((it) => ({ name: it.name, quantity: it.quantity, pricePerUnit: it.pricePerUnit })),
+          subtotal: Number(created.subtotalAmount),
+          discountPercent: Number(created.discountPercent),
+          discountAmount: Number(created.discountAmount),
+          total: Number(created.totalAmount),
         });
         setCart([]);
         setDiscountPercent("");
@@ -329,7 +345,7 @@ function ShiftWorkSheet({ shift, onClose, onClosedShift }: { shift: ShiftRow; on
         queryClient.invalidateQueries({ queryKey: getListSalesQueryKey(salesParams) });
         queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey() });
       },
-      onError: () => toast({ title: "Ошибка", variant: "destructive" }),
+      onError: (e: unknown) => toast({ title: "Продажа не оформлена", description: (e as { data?: { error?: string } })?.data?.error, variant: "destructive" }),
     });
   }
 
@@ -353,11 +369,11 @@ function ShiftWorkSheet({ shift, onClose, onClosedShift }: { shift: ShiftRow; on
         queryClient.invalidateQueries({ queryKey: getListCashMovementsQueryKey(shift.id) });
         queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey() });
       },
-      onError: (e: unknown) => toast({ title: "Ошибка", description: e instanceof Error ? e.message : undefined, variant: "destructive" }),
+      onError: (e: unknown) => toast({ title: "Ошибка", description: (e as { data?: { error?: string } })?.data?.error, variant: "destructive" }),
     });
   }
 
-  const expectedCashNow = Number(shift.openingCash) + Number(shift.totalSalesCash) - Number(shift.totalReturns) - Number(shift.totalCollected) + Number(shift.totalDeposited);
+  const expectedCashNow = Number(shift.openingCash) + Number(shift.totalSalesCash) - Number(shift.totalReturnsCash ?? shift.totalReturns) - Number(shift.totalCollected) + Number(shift.totalDeposited);
 
   return (
     <Sheet open onOpenChange={(v) => !v && onClose()}>
@@ -389,8 +405,13 @@ function ShiftWorkSheet({ shift, onClose, onClosedShift }: { shift: ShiftRow; on
                 <Button variant="ghost" size="sm" onClick={() => setMovementDialogOpen(true)} data-testid="btn-cash-movement"><Wallet className="mr-1.5 h-3.5 w-3.5" /> Инкассация</Button>
               </div>
 
+              <Input
+                value={scan} onChange={(e) => setScan(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleScan(); } }}
+                placeholder="Штрих-код или название + Enter" autoComplete="off" data-testid="input-scan"
+              />
               {!shift.houseId || !Object.keys(productsByCategory).length ? (
-                <p className="text-xs text-muted-foreground">Для этого домика ещё не настроены товары. Добавьте позицию вручную ниже.</p>
+                <p className="text-xs text-muted-foreground">Для этой точки ещё не настроено меню. Добавьте позиции в разделе «Точки продаж» → «Меню».</p>
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -443,8 +464,8 @@ function ShiftWorkSheet({ shift, onClose, onClosedShift }: { shift: ShiftRow; on
                 </div>
               )}
 
-              {!manualOpen ? (
-                <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-3.5 w-3.5" /> Другой товар</Button>
+              {!canFreePrice ? null : !manualOpen ? (
+                <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-3.5 w-3.5" /> Позиция по свободной цене</Button>
               ) : (
                 <div className="flex gap-2 items-start rounded-lg border border-dashed border-border p-2">
                   <Input placeholder="Название" value={manualRow.name} onChange={(e) => setManualRow((r) => ({ ...r, name: e.target.value }))} className="flex-1" data-testid="input-manual-name" />
@@ -680,15 +701,16 @@ function SaleRow({ sale, shiftId, canReturn, houseName, registerName, cashierNam
   }
 
   function returnItem(saleItemId: number, quantity: number, name: string) {
-    if (!confirm(`Вернуть «${name}» (${quantity} шт)?`)) return;
-    createReturn.mutate({ id: sale.id, data: { items: [{ saleItemId, quantity }], reason: "Возврат" } }, {
+    if (!confirm(`Вернуть «${name}» (${quantity} шт)? Сумма возврата учитывает скидку по чеку.`)) return;
+    const restock = confirm("Блюдо не готовили и продукты можно вернуть на склад?\n\nОК — вернуть продукты на склад.\nОтмена — продукты остаются списанными (блюдо приготовлено).");
+    createReturn.mutate({ id: sale.id, data: { items: [{ saleItemId, quantity }], reason: "Возврат", restock } as unknown as Parameters<typeof createReturn.mutate>[0]["data"] }, {
       onSuccess: () => {
         toast({ title: "Возврат оформлен" });
         queryClient.invalidateQueries({ queryKey: getListSalesQueryKey({ shiftId }) });
         queryClient.invalidateQueries({ queryKey: getGetSaleQueryKey(sale.id) });
         queryClient.invalidateQueries({ queryKey: getListShiftsQueryKey() });
       },
-      onError: (e: unknown) => toast({ title: "Ошибка", description: e instanceof Error ? e.message : undefined, variant: "destructive" }),
+      onError: (e: unknown) => toast({ title: "Ошибка", description: (e as { data?: { error?: string } })?.data?.error, variant: "destructive" }),
     });
   }
 

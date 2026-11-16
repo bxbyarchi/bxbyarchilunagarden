@@ -79,6 +79,8 @@ export interface CardInfo {
   salePrice: number | null;
   /** Stock item the semi-finished product is produced into (null = never produced). */
   outputItemId?: number | null;
+  /** Department that prepares it (kitchen, bar…). */
+  departmentId?: number | null;
   ingredients: IngredientInput[];
 }
 

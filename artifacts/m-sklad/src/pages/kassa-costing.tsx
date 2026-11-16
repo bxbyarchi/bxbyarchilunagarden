@@ -54,7 +54,7 @@ export default function KassaCosting() {
           </Select>
         )}
         <Select value={houseId} onValueChange={setHouseId}>
-          <SelectTrigger className="w-[220px]" data-testid="select-costing-house"><SelectValue placeholder="Выберите домик" /></SelectTrigger>
+          <SelectTrigger className="w-[220px]" data-testid="select-costing-house"><SelectValue placeholder="Выберите точку продаж" /></SelectTrigger>
           <SelectContent>
             {houses?.map((h) => <SelectItem key={h.id} value={String(h.id)}>{h.name}{h.locationName ? ` — ${h.locationName}` : ""}</SelectItem>)}
           </SelectContent>
@@ -62,7 +62,7 @@ export default function KassaCosting() {
       </div>
 
       {!houseId ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">Выберите домик, чтобы посчитать себестоимость его меню.</CardContent></Card>
+        <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">Выберите точку продаж, чтобы посчитать себестоимость его меню.</CardContent></Card>
       ) : (
         <Card>
           <CardContent className="p-0 overflow-x-auto">
@@ -81,7 +81,7 @@ export default function KassaCosting() {
                 {isLoading ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Загрузка...</TableCell></TableRow>
                 ) : !products?.length ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">В меню этого домика пока нет товаров</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">В меню этого точки продаж пока нет товаров</TableCell></TableRow>
                 ) : (
                   (products as ProductRow[]).map((p) => <CostingRow key={p.id} product={p} onOpenRecipe={() => setCostingProduct(p)} />)
                 )}

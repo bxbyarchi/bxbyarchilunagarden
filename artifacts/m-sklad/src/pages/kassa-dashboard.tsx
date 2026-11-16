@@ -40,7 +40,7 @@ export default function KassaDashboard() {
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Аналитика касс</h1>
-          <p className="text-muted-foreground text-sm">Продажи, возвраты и выручка по ярмарке.</p>
+          <p className="text-muted-foreground text-sm">Продажи, возвраты и выручка по ресторану.</p>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
@@ -86,10 +86,10 @@ export default function KassaDashboard() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base font-semibold">По домикам</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base font-semibold">По точкам продаж</CardTitle></CardHeader>
           <CardContent className="p-0">
             <Table>
-              <TableHeader><TableRow><TableHead>Домик</TableHead><TableHead className="text-right">Продаж</TableHead><TableHead className="text-right">Выручка</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Точка продаж</TableHead><TableHead className="text-right">Продаж</TableHead><TableHead className="text-right">Выручка</TableHead></TableRow></TableHeader>
               <TableBody>
                 {!summary?.byHouse.length ? (
                   <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">Нет данных</TableCell></TableRow>
