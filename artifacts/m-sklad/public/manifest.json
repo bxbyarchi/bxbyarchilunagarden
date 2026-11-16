@@ -1,0 +1,25 @@
+{
+  "name": "Северное сияние — Ярмарка",
+  "short_name": "Северное сияние",
+  "description": "Система управления ярмаркой «Северное сияние»",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#8b1028",
+  "theme_color": "#8b1028",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["business", "productivity", "events"],
+  "lang": "ru"
+}

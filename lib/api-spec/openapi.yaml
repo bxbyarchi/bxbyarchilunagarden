@@ -1,0 +1,2917 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: M-Sklad Restaurant Inventory & ERP API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Auth context
+  - name: categories
+    description: Item categories
+  - name: locations
+    description: Warehouse locations
+  - name: venue
+    description: Fair venue structure — houses and cash registers
+  - name: kassa
+    description: Cash register operations — shifts, sales, returns, analytics
+  - name: items
+    description: Inventory items
+  - name: receipts
+    description: Goods receiving
+  - name: write-offs
+    description: Write-offs and breakage
+  - name: inventory-audits
+    description: Inventory audits
+  - name: staff
+    description: Staff directory
+  - name: analytics
+    description: Analytics & dashboard
+  - name: audit-log
+    description: Audit log
+  - name: storage
+    description: File storage
+  - name: rentals
+    description: Equipment rental tracking
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user info and role
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          description: Unauthorized
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List all categories
+      responses:
+        "200":
+          description: Categories list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /categories/{id}:
+    patch:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Update a category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete a category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /locations:
+    get:
+      operationId: listLocations
+      tags: [locations]
+      summary: List active warehouse locations
+      responses:
+        "200":
+          description: Locations list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Location"
+
+  /locations/{id}:
+    patch:
+      operationId: updateLocation
+      tags: [locations]
+      summary: Update a location (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+
+  /houses:
+    get:
+      operationId: listHouses
+      tags: [venue]
+      summary: List fair houses (домики), scoped by warehouse/venue location
+      parameters:
+        - name: locationId
+          in: query
+          description: Admin only — filter to a specific venue location.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Houses list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/House"
+    post:
+      operationId: createHouse
+      tags: [venue]
+      summary: Create a house (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHouseBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/House"
+
+  /houses/{id}:
+    patch:
+      operationId: updateHouse
+      tags: [venue]
+      summary: Update a house (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHouseBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/House"
+    delete:
+      operationId: deleteHouse
+      tags: [venue]
+      summary: Delete a house (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /registers:
+    get:
+      operationId: listRegisters
+      tags: [venue]
+      summary: List cash registers (кассы), scoped by warehouse/venue location
+      parameters:
+        - name: locationId
+          in: query
+          description: Admin only — filter to a specific venue location.
+          schema:
+            type: integer
+        - name: houseId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Registers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Register"
+    post:
+      operationId: createRegister
+      tags: [venue]
+      summary: Create a register (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRegisterBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Register"
+
+  /registers/{id}:
+    patch:
+      operationId: updateRegister
+      tags: [venue]
+      summary: Update a register (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRegisterBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Register"
+    delete:
+      operationId: deleteRegister
+      tags: [venue]
+      summary: Delete a register (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /shifts:
+    get:
+      operationId: listShifts
+      tags: [kassa]
+      summary: List cash register shifts, scoped by venue location
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: registerId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed]
+      responses:
+        "200":
+          description: Shifts list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftListItem"
+    post:
+      operationId: openShift
+      tags: [kassa]
+      summary: Open a new shift on a register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenShiftBody"
+      responses:
+        "201":
+          description: Opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+
+  /shifts/{id}:
+    get:
+      operationId: getShift
+      tags: [kassa]
+      summary: Get a single shift
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+
+  /shifts/{id}/close:
+    patch:
+      operationId: closeShift
+      tags: [kassa]
+      summary: Close a shift with counted cash (Z-report)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseShiftBody"
+      responses:
+        "200":
+          description: Closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+
+  /sales:
+    get:
+      operationId: listSales
+      tags: [kassa]
+      summary: List sales, scoped by venue location
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: shiftId
+          in: query
+          schema:
+            type: integer
+        - name: registerId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sales list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SaleListItem"
+    post:
+      operationId: createSale
+      tags: [kassa]
+      summary: Record a sale within an open shift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSaleBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+
+  /sales/{id}:
+    get:
+      operationId: getSale
+      tags: [kassa]
+      summary: Get a sale with its line items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sale with items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleDetail"
+
+  /sales/{id}/returns:
+    post:
+      operationId: createReturn
+      tags: [kassa]
+      summary: Register a return/refund/defect against a sale
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReturnBody"
+      responses:
+        "200":
+          description: Return recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReturnResult"
+
+  /kassa-analytics/summary:
+    get:
+      operationId: getKassaAnalyticsSummary
+      tags: [kassa]
+      summary: Kassa dashboard summary — revenue, returns, breakdown by venue/house, top items
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KassaAnalyticsSummary"
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: [venue]
+      summary: List sellable products (menu) of a house, grouped for the POS grid
+      parameters:
+        - name: houseId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Products list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [venue]
+      summary: Add a product to a house's menu (location_admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    patch:
+      operationId: updateProduct
+      tags: [venue]
+      summary: Update a product (location_admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [venue]
+      summary: Delete a product (location_admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /products/{id}/cost:
+    get:
+      operationId: getProductCost
+      tags: [venue]
+      summary: Recipe cost breakdown and margin for a product (себестоимость), location_admin only
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cost breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductCost"
+
+  /products/{id}/recipe:
+    post:
+      operationId: addRecipeItem
+      tags: [venue]
+      summary: Add a warehouse ingredient to a product's recipe (location_admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddRecipeItemBody"
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeItem"
+
+  /products/recipe/{id}:
+    patch:
+      operationId: updateRecipeItem
+      tags: [venue]
+      summary: Update a recipe ingredient's quantity (location_admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRecipeItemBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecipeItem"
+    delete:
+      operationId: deleteRecipeItem
+      tags: [venue]
+      summary: Remove an ingredient from a product's recipe (location_admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /shifts/{id}/cash-movements:
+    get:
+      operationId: listCashMovements
+      tags: [kassa]
+      summary: List инкассация (cash collection/deposit) events for a shift
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cash movements list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashMovement"
+    post:
+      operationId: createCashMovement
+      tags: [kassa]
+      summary: Record a mid-shift cash collection or deposit (инкассация)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCashMovementBody"
+      responses:
+        "201":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashMovement"
+
+  /items:
+    get:
+      operationId: listItems
+      tags: [items]
+      summary: List inventory items
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: belowThreshold
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: locationId
+          in: query
+          description: Admin only — filter to a specific warehouse. Non-admins are always scoped to their own.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Items list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Item"
+    post:
+      operationId: createItem
+      tags: [items]
+      summary: Create an inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItemBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+
+  /items/{id}:
+    get:
+      operationId: getItem
+      tags: [items]
+      summary: Get a single item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateItem
+      tags: [items]
+      summary: Update an item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateItemBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+    delete:
+      operationId: deleteItem
+      tags: [items]
+      summary: Delete an item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /receipts:
+    get:
+      operationId: listReceipts
+      tags: [receipts]
+      summary: List receipts (receiving records)
+      parameters:
+        - name: itemId
+          in: query
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Receipts list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Receipt"
+    post:
+      operationId: createReceipt
+      tags: [receipts]
+      summary: Record a goods receipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReceiptBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+
+  /receipts/{id}:
+    get:
+      operationId: getReceipt
+      tags: [receipts]
+      summary: Get a receipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+    patch:
+      operationId: updateReceipt
+      tags: [receipts]
+      summary: Update a receipt (manager/admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReceiptBody"
+      responses:
+        "200":
+          description: Updated receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteReceipt
+      tags: [receipts]
+      summary: Delete a receipt and reverse stock adjustment (manager/admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /write-offs:
+    get:
+      operationId: listWriteOffs
+      tags: [write-offs]
+      summary: List write-offs and breakage records
+      parameters:
+        - name: itemId
+          in: query
+          schema:
+            type: integer
+        - name: staffId
+          in: query
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Write-offs list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WriteOff"
+    post:
+      operationId: createWriteOff
+      tags: [write-offs]
+      summary: Record a write-off or breakage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWriteOffBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WriteOff"
+
+  /write-offs/{id}:
+    get:
+      operationId: getWriteOff
+      tags: [write-offs]
+      summary: Get a write-off
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: WriteOff
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WriteOff"
+    patch:
+      operationId: updateWriteOff
+      tags: [write-offs]
+      summary: Update a write-off (manager/admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWriteOffBody"
+      responses:
+        "200":
+          description: Updated write-off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WriteOff"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteWriteOff
+      tags: [write-offs]
+      summary: Delete a write-off and reverse stock adjustment (manager/admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /inventory-audits:
+    get:
+      operationId: listInventoryAudits
+      tags: [inventory-audits]
+      summary: List inventory audits
+      responses:
+        "200":
+          description: Audits list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryAudit"
+    post:
+      operationId: createInventoryAudit
+      tags: [inventory-audits]
+      summary: Start a new inventory audit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryAuditBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAudit"
+
+  /inventory-audits/{id}:
+    get:
+      operationId: getInventoryAudit
+      tags: [inventory-audits]
+      summary: Get an inventory audit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAudit"
+    patch:
+      operationId: updateInventoryAudit
+      tags: [inventory-audits]
+      summary: Update audit items (submit counts)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInventoryAuditBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAudit"
+
+  /inventory-audits/{id}/submit:
+    post:
+      operationId: submitInventoryAudit
+      tags: [inventory-audits]
+      summary: Submit (finalize) an inventory audit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryAudit"
+
+  /staff:
+    get:
+      operationId: listStaff
+      tags: [staff]
+      summary: List staff members
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffMember"
+    post:
+      operationId: createStaffMember
+      tags: [staff]
+      summary: Create a staff member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffMemberBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+
+  /staff/{id}:
+    patch:
+      operationId: updateStaffMember
+      tags: [staff]
+      summary: Update a staff member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStaffMemberBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+    delete:
+      operationId: deleteStaffMember
+      tags: [staff]
+      summary: Delete a staff member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /analytics/category-breakdown:
+    get:
+      operationId: getAnalyticsCategoryBreakdown
+      tags: [analytics]
+      summary: Category breakdown by value
+      responses:
+        "200":
+          description: Category breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryBreakdownItem"
+
+  /analytics/spending-over-time:
+    get:
+      operationId: getAnalyticsSpendingOverTime
+      tags: [analytics]
+      summary: Spending over time (receipts vs write-offs)
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, year]
+            default: month
+      responses:
+        "200":
+          description: Time series data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SpendingDataPoint"
+
+  /analytics/top-write-offs:
+    get:
+      operationId: getAnalyticsTopWriteOffs
+      tags: [analytics]
+      summary: Top items by write-off frequency
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Top write-offs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopWriteOffItem"
+
+  /analytics/low-stock:
+    get:
+      operationId: getAnalyticsLowStock
+      tags: [analytics]
+      summary: Items at or below minimum threshold
+      responses:
+        "200":
+          description: Low stock items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Item"
+
+  /audit-log:
+    get:
+      operationId: listAuditLog
+      tags: [audit-log]
+      summary: List audit log entries (admin/manager only)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogListResponse"
+
+  /export/stock:
+    get:
+      operationId: exportStock
+      tags: [analytics]
+      summary: Export current stock as Excel file
+      responses:
+        "200":
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /export/write-offs:
+    get:
+      operationId: exportWriteOffs
+      tags: [analytics]
+      summary: Export write-off report as Excel file
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /export/kassa:
+    get:
+      operationId: exportKassa
+      tags: [kassa]
+      summary: Export shifts and sales report as Excel file
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /admin/seed-demo-data:
+    post:
+      operationId: seedDemoData
+      tags: [kassa]
+      summary: Admin only — populate houses/registers/shifts/sales/warehouse items with demo data for review. Idempotent per house/register (skips ones that already have data).
+      responses:
+        "200":
+          description: Seed summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  summary:
+                    type: object
+                    additionalProperties:
+                      type: integer
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+
+  /rentals:
+    get:
+      operationId: listRentals
+      tags: [rentals]
+      summary: List all rentals
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, returned]
+      responses:
+        "200":
+          description: Rentals list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Rental"
+    post:
+      operationId: createRental
+      tags: [rentals]
+      summary: Create a rental (decreases stock)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRentalBody"
+      responses:
+        "201":
+          description: Created rental
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rental"
+
+  /rentals/{id}:
+    get:
+      operationId: getRental
+      tags: [rentals]
+      summary: Get rental by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Rental
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rental"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateRental
+      tags: [rentals]
+      summary: Update rental (e.g. mark returned)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRentalBody"
+      responses:
+        "200":
+          description: Updated rental
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rental"
+
+  /analytics/active-rentals:
+    get:
+      operationId: getAnalyticsActiveRentals
+      tags: [analytics]
+      summary: Items currently out on rental
+      responses:
+        "200":
+          description: Active rentals summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActiveRentalItem"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    CurrentUser:
+      type: object
+      properties:
+        clerkUserId:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, warehouse_chief, manager, accountant, warehouse, location_admin, cashier]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        telegramChatId:
+          type: ["string", "null"]
+        locationId:
+          type: ["integer", "null"]
+        locationName:
+          type: ["string", "null"]
+      required:
+        - clerkUserId
+        - email
+        - role
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - slug
+        - createdAt
+
+    CreateCategoryBody:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: ["string", "null"]
+      required:
+        - name
+        - slug
+
+    UpdateCategoryBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+
+    Item:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        categoryId:
+          type: integer
+        categoryName:
+          type: ["string", "null"]
+        unit:
+          type: string
+        location:
+          type: ["string", "null"]
+        currentStock:
+          type: number
+        minThreshold:
+          type: ["number", "null"]
+        pricePerUnit:
+          type: number
+        isBelowThreshold:
+          type: boolean
+        photoUrl:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - categoryId
+        - unit
+        - currentStock
+        - pricePerUnit
+        - isBelowThreshold
+        - createdAt
+        - updatedAt
+
+    CreateItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        categoryId:
+          type: integer
+        unit:
+          type: string
+        location:
+          type: ["string", "null"]
+        currentStock:
+          type: number
+        minThreshold:
+          type: ["number", "null"]
+        pricePerUnit:
+          type: number
+        photoUrl:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - name
+        - categoryId
+        - unit
+        - pricePerUnit
+
+    UpdateItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        categoryId:
+          type: integer
+        unit:
+          type: string
+        location:
+          type: ["string", "null"]
+        minThreshold:
+          type: ["number", "null"]
+        pricePerUnit:
+          type: number
+        photoUrl:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    Receipt:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        itemName:
+          type: ["string", "null"]
+        quantity:
+          type: number
+        pricePerUnit:
+          type: number
+        totalCost:
+          type: number
+        supplier:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        photoUrls:
+          type: array
+          items:
+            type: string
+        notes:
+          type: ["string", "null"]
+        recordedByClerkId:
+          type: ["string", "null"]
+        recordedByName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - itemId
+        - quantity
+        - pricePerUnit
+        - totalCost
+        - createdAt
+
+    CreateReceiptBody:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        quantity:
+          type: number
+        pricePerUnit:
+          type: number
+        supplier:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        photoUrls:
+          type: array
+          items:
+            type: string
+        notes:
+          type: ["string", "null"]
+      required:
+        - itemId
+        - quantity
+        - pricePerUnit
+
+    UpdateReceiptBody:
+      type: object
+      properties:
+        quantity:
+          type: number
+        pricePerUnit:
+          type: number
+        supplier:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        photoUrls:
+          type: array
+          items:
+            type: string
+        notes:
+          type: ["string", "null"]
+
+    WriteOff:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        itemName:
+          type: ["string", "null"]
+        quantity:
+          type: number
+        reason:
+          type: string
+        staffId:
+          type: ["integer", "null"]
+        staffName:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        recordedByClerkId:
+          type: ["string", "null"]
+        totalValue:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - itemId
+        - quantity
+        - reason
+        - totalValue
+        - createdAt
+
+    UpdateWriteOffBody:
+      type: object
+      properties:
+        quantity:
+          type: number
+        reason:
+          type: string
+        staffId:
+          type: ["integer", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    CreateWriteOffBody:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        quantity:
+          type: number
+        reason:
+          type: string
+        staffId:
+          type: ["integer", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - itemId
+        - quantity
+        - reason
+
+    InventoryAudit:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, submitted]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditItem"
+        createdAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: ["string", "null"]
+      required:
+        - id
+        - title
+        - status
+        - items
+        - createdAt
+
+    AuditItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        auditId:
+          type: integer
+        itemId:
+          type: integer
+        itemName:
+          type: ["string", "null"]
+        systemStock:
+          type: number
+        actualStock:
+          type: ["number", "null"]
+        discrepancy:
+          type: ["number", "null"]
+      required:
+        - id
+        - auditId
+        - itemId
+        - systemStock
+
+    CreateInventoryAuditBody:
+      type: object
+      properties:
+        title:
+          type: string
+        categoryId:
+          type: ["integer", "null"]
+      required:
+        - title
+
+    UpdateInventoryAuditBody:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              itemId:
+                type: integer
+              actualStock:
+                type: number
+            required:
+              - itemId
+              - actualStock
+      required:
+        - items
+
+    Location:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        isActive:
+          type: boolean
+        isVenue:
+          type: boolean
+          description: True if this location also hosts fair houses/registers (not just a warehouse).
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - code
+        - isActive
+        - isVenue
+        - createdAt
+
+    UpdateLocationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        isActive:
+          type: boolean
+        isVenue:
+          type: boolean
+
+    House:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        isActive:
+          type: boolean
+        locationId:
+          type: integer
+        locationName:
+          type: ["string", "null"]
+        registerCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - isActive
+        - locationId
+        - registerCount
+        - createdAt
+
+    CreateHouseBody:
+      type: object
+      properties:
+        name:
+          type: string
+        locationId:
+          type: integer
+        isActive:
+          type: boolean
+      required:
+        - name
+        - locationId
+
+    UpdateHouseBody:
+      type: object
+      properties:
+        name:
+          type: string
+        isActive:
+          type: boolean
+
+    Register:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        isActive:
+          type: boolean
+        houseId:
+          type: integer
+        houseName:
+          type: ["string", "null"]
+        locationId:
+          type: ["integer", "null"]
+        locationName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - isActive
+        - houseId
+        - createdAt
+
+    CreateRegisterBody:
+      type: object
+      properties:
+        name:
+          type: string
+        houseId:
+          type: integer
+        isActive:
+          type: boolean
+      required:
+        - name
+        - houseId
+
+    UpdateRegisterBody:
+      type: object
+      properties:
+        name:
+          type: string
+        isActive:
+          type: boolean
+
+    Shift:
+      type: object
+      properties:
+        id:
+          type: integer
+        registerId:
+          type: integer
+        cashierName:
+          type: string
+        status:
+          type: string
+          enum: [open, closed]
+        openingCash:
+          type: string
+        closingCashCounted:
+          type: ["string", "null"]
+        expectedCash:
+          type: ["string", "null"]
+        cashDifference:
+          type: ["string", "null"]
+        totalSalesCash:
+          type: string
+        totalSalesCard:
+          type: string
+        totalReturns:
+          type: string
+        totalCollected:
+          type: string
+        totalDeposited:
+          type: string
+        notes:
+          type: ["string", "null"]
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - registerId
+        - cashierName
+        - status
+        - openingCash
+        - totalSalesCash
+        - totalSalesCard
+        - totalReturns
+        - totalCollected
+        - totalDeposited
+        - openedAt
+
+    ShiftListItem:
+      allOf:
+        - $ref: "#/components/schemas/Shift"
+        - type: object
+          properties:
+            registerName:
+              type: string
+            houseId:
+              type: integer
+            houseName:
+              type: string
+            locationId:
+              type: integer
+            locationName:
+              type: ["string", "null"]
+
+    OpenShiftBody:
+      type: object
+      properties:
+        registerId:
+          type: integer
+        cashierName:
+          type: string
+        openingCash:
+          type: number
+      required:
+        - registerId
+        - cashierName
+
+    CloseShiftBody:
+      type: object
+      properties:
+        closingCashCounted:
+          type: number
+        notes:
+          type: string
+      required:
+        - closingCashCounted
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        houseId:
+          type: integer
+        category:
+          type: string
+        name:
+          type: string
+        price:
+          type: string
+        isActive:
+          type: boolean
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - houseId
+        - category
+        - name
+        - price
+        - isActive
+        - sortOrder
+        - createdAt
+
+    CreateProductBody:
+      type: object
+      properties:
+        houseId:
+          type: integer
+        category:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+        sortOrder:
+          type: integer
+      required:
+        - houseId
+        - category
+        - name
+        - price
+
+    UpdateProductBody:
+      type: object
+      properties:
+        category:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+        isActive:
+          type: boolean
+        sortOrder:
+          type: integer
+
+    RecipeItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        itemId:
+          type: integer
+        quantity:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - productId
+        - itemId
+        - quantity
+        - createdAt
+
+    AddRecipeItemBody:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        quantity:
+          type: number
+      required:
+        - itemId
+        - quantity
+
+    UpdateRecipeItemBody:
+      type: object
+      properties:
+        quantity:
+          type: number
+      required:
+        - quantity
+
+    ProductCostIngredient:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        itemName:
+          type: string
+        unit:
+          type: string
+        quantity:
+          type: string
+        pricePerUnit:
+          type: string
+        cost:
+          type: number
+      required:
+        - id
+        - itemId
+        - itemName
+        - unit
+        - quantity
+        - pricePerUnit
+        - cost
+
+    ProductCost:
+      type: object
+      properties:
+        productId:
+          type: integer
+        price:
+          type: number
+        totalCost:
+          type: number
+        margin:
+          type: number
+        marginPercent:
+          type: number
+        ingredients:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductCostIngredient"
+      required:
+        - productId
+        - price
+        - totalCost
+        - margin
+        - marginPercent
+        - ingredients
+
+    CashMovement:
+      type: object
+      properties:
+        id:
+          type: integer
+        shiftId:
+          type: integer
+        type:
+          type: string
+          enum: [collection, deposit]
+        amount:
+          type: string
+        note:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - shiftId
+        - type
+        - amount
+        - createdAt
+
+    CreateCashMovementBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [collection, deposit]
+        amount:
+          type: number
+        note:
+          type: string
+      required:
+        - type
+        - amount
+
+    SaleItemInput:
+      type: object
+      properties:
+        productId:
+          type: integer
+        name:
+          type: string
+        quantity:
+          type: number
+        pricePerUnit:
+          type: number
+      required:
+        - name
+        - quantity
+        - pricePerUnit
+
+    CreateSaleBody:
+      type: object
+      properties:
+        shiftId:
+          type: integer
+        paymentMethod:
+          type: string
+          enum: [cash, card]
+        discountPercent:
+          type: number
+        discountReason:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleItemInput"
+      required:
+        - shiftId
+        - items
+
+    Sale:
+      type: object
+      properties:
+        id:
+          type: integer
+        shiftId:
+          type: integer
+        registerId:
+          type: integer
+        subtotalAmount:
+          type: string
+        discountPercent:
+          type: string
+        discountAmount:
+          type: string
+        discountReason:
+          type: ["string", "null"]
+        totalAmount:
+          type: string
+        paymentMethod:
+          type: string
+          enum: [cash, card]
+        status:
+          type: string
+          enum: [completed, returned, partially_returned]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - shiftId
+        - registerId
+        - subtotalAmount
+        - discountPercent
+        - discountAmount
+        - totalAmount
+        - paymentMethod
+        - status
+        - createdAt
+
+    SaleListItem:
+      allOf:
+        - $ref: "#/components/schemas/Sale"
+        - type: object
+          properties:
+            registerName:
+              type: string
+            houseName:
+              type: string
+            locationName:
+              type: ["string", "null"]
+
+    SaleItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        saleId:
+          type: integer
+        productId:
+          type: ["integer", "null"]
+        name:
+          type: string
+        quantity:
+          type: string
+        pricePerUnit:
+          type: string
+        totalPrice:
+          type: string
+        returnedQuantity:
+          type: string
+      required:
+        - id
+        - saleId
+        - name
+        - quantity
+        - pricePerUnit
+        - totalPrice
+        - returnedQuantity
+
+    SaleDetail:
+      allOf:
+        - $ref: "#/components/schemas/Sale"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/SaleItem"
+
+    CreateReturnBody:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              saleItemId:
+                type: integer
+              quantity:
+                type: number
+            required:
+              - saleItemId
+              - quantity
+        reason:
+          type: string
+      required:
+        - items
+
+    ReturnResult:
+      type: object
+      properties:
+        totalReturnAmount:
+          type: number
+        status:
+          type: string
+      required:
+        - totalReturnAmount
+        - status
+
+    KassaVenueBreakdown:
+      type: object
+      properties:
+        locationId:
+          type: ["integer", "null"]
+        locationName:
+          type: string
+        totalSales:
+          type: number
+        salesCount:
+          type: integer
+      required:
+        - locationName
+        - totalSales
+        - salesCount
+
+    KassaHouseBreakdown:
+      type: object
+      properties:
+        houseId:
+          type: integer
+        houseName:
+          type: string
+        locationName:
+          type: string
+        totalSales:
+          type: number
+        salesCount:
+          type: integer
+      required:
+        - houseId
+        - houseName
+        - locationName
+        - totalSales
+        - salesCount
+
+    KassaTopItem:
+      type: object
+      properties:
+        name:
+          type: string
+        totalQuantity:
+          type: number
+        totalRevenue:
+          type: number
+      required:
+        - name
+        - totalQuantity
+        - totalRevenue
+
+    KassaAnalyticsSummary:
+      type: object
+      properties:
+        totalSalesCash:
+          type: number
+        totalSalesCard:
+          type: number
+        totalSales:
+          type: number
+        totalReturns:
+          type: number
+        netRevenue:
+          type: number
+        salesCount:
+          type: integer
+        openShiftsCount:
+          type: integer
+        byVenue:
+          type: array
+          items:
+            $ref: "#/components/schemas/KassaVenueBreakdown"
+        byHouse:
+          type: array
+          items:
+            $ref: "#/components/schemas/KassaHouseBreakdown"
+        topItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/KassaTopItem"
+      required:
+        - totalSalesCash
+        - totalSalesCard
+        - totalSales
+        - totalReturns
+        - netRevenue
+        - salesCount
+        - openShiftsCount
+        - byVenue
+        - byHouse
+        - topItems
+
+    StaffMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        position:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        locationId:
+          type: ["integer", "null"]
+        locationName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - isActive
+        - createdAt
+
+    CreateStaffMemberBody:
+      type: object
+      properties:
+        name:
+          type: string
+        position:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        locationId:
+          type: ["integer", "null"]
+      required:
+        - name
+
+    UpdateStaffMemberBody:
+      type: object
+      properties:
+        name:
+          type: string
+        position:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        locationId:
+          type: ["integer", "null"]
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+        totalStockValue:
+          type: number
+        lowStockCount:
+          type: integer
+        totalReceiptsThisMonth:
+          type: number
+        totalWriteOffsThisMonth:
+          type: number
+        receiptsTrend:
+          type: number
+        writeOffsTrend:
+          type: number
+      required:
+        - totalItems
+        - totalStockValue
+        - lowStockCount
+        - totalReceiptsThisMonth
+        - totalWriteOffsThisMonth
+        - receiptsTrend
+        - writeOffsTrend
+
+    CategoryBreakdownItem:
+      type: object
+      properties:
+        categoryId:
+          type: integer
+        categoryName:
+          type: string
+        totalValue:
+          type: number
+        itemCount:
+          type: integer
+      required:
+        - categoryId
+        - categoryName
+        - totalValue
+        - itemCount
+
+    SpendingDataPoint:
+      type: object
+      properties:
+        period:
+          type: string
+        receipts:
+          type: number
+        writeOffs:
+          type: number
+      required:
+        - period
+        - receipts
+        - writeOffs
+
+    TopWriteOffItem:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        itemName:
+          type: string
+        totalQuantity:
+          type: number
+        totalValue:
+          type: number
+        writeOffCount:
+          type: integer
+      required:
+        - itemId
+        - itemName
+        - totalQuantity
+        - totalValue
+        - writeOffCount
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: ["integer", "null"]
+        clerkUserId:
+          type: ["string", "null"]
+        details:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - action
+        - entityType
+        - createdAt
+
+    AuditLogListResponse:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - rows
+        - total
+        - limit
+        - offset
+
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+      required:
+        - uploadURL
+        - objectPath
+
+    Rental:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        itemName:
+          type: ["string", "null"]
+        itemUnit:
+          type: ["string", "null"]
+        quantity:
+          type: number
+        renterName:
+          type: string
+        renterPhone:
+          type: ["string", "null"]
+        issuedAt:
+          type: string
+          format: date-time
+        plannedReturnAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, returned]
+        returnedAt:
+          type: ["string", "null"]
+          format: date-time
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        isOverdue:
+          type: boolean
+      required:
+        - id
+        - itemId
+        - quantity
+        - renterName
+        - issuedAt
+        - plannedReturnAt
+        - status
+        - createdAt
+        - isOverdue
+
+    CreateRentalBody:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        quantity:
+          type: number
+        renterName:
+          type: string
+        renterPhone:
+          type: string
+        issuedAt:
+          type: string
+          format: date-time
+        plannedReturnAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+      required:
+        - itemId
+        - quantity
+        - renterName
+        - issuedAt
+        - plannedReturnAt
+
+    UpdateRentalBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [active, returned]
+        renterName:
+          type: string
+        renterPhone:
+          type: string
+        plannedReturnAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+
+    ActiveRentalItem:
+      type: object
+      properties:
+        rentalId:
+          type: integer
+        itemId:
+          type: integer
+        itemName:
+          type: string
+        itemUnit:
+          type: string
+        quantity:
+          type: number
+        renterName:
+          type: string
+        renterPhone:
+          type: ["string", "null"]
+        issuedAt:
+          type: string
+          format: date-time
+        plannedReturnAt:
+          type: string
+          format: date-time
+        isOverdue:
+          type: boolean
+      required:
+        - rentalId
+        - itemId
+        - itemName
+        - itemUnit
+        - quantity
+        - renterName
+        - issuedAt
+        - plannedReturnAt
+        - isOverdue
