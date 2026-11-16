@@ -4,6 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/requireAuth";
 import { getWarehouseScope, canAccessLocation, locationExists, isWarehouseAdmin } from "../lib/warehouseScope";
 import { logAudit } from "../lib/auditLogger";
+import { moveContext } from "../lib/stock";
 
 const router: IRouter = Router();
 
@@ -39,7 +40,7 @@ router.post("/transfers", requireAuth(), async (req: Request, res: Response) => 
   if (!canAccessLocation(scope, fromId)) { res.status(403).json({ error: "Нет доступа к складу отправителя" }); return; }
   if (!(await locationExists(fromId)) || !(await locationExists(toId))) { res.status(400).json({ error: "Склад не найден или отключён" }); return; }
   try {
-    const transfer = await db.transaction(async (tx) => {
+    const transfer = await db.transaction(async (tx) => { await moveContext(tx, "transfer_out", null, req.auth?.userId); 
       const [stock] = await tx.select().from(warehouseStockTable).where(and(eq(warehouseStockTable.itemId, item), eq(warehouseStockTable.locationId, fromId)));
       const current = Number(stock?.currentStock ?? 0);
       if (current < qty) throw new Error(`Недостаточно товара на складе. Доступно: ${current}`);
@@ -58,7 +59,7 @@ router.post("/transfers/:id/accept", requireAuth(), async (req: Request, res: Re
   if (!scope) { res.status(403).json({ error: "Пользователь не настроен" }); return; }
   const id = Number(req.params.id);
   try {
-    const transfer = await db.transaction(async (tx) => {
+    const transfer = await db.transaction(async (tx) => { await moveContext(tx, "transfer_in", id, req.auth?.userId); 
       const [row] = await tx.select().from(transfersTable).where(eq(transfersTable.id, id));
       if (!row) throw new Error("Перемещение не найдено");
       if (row.status !== "pending") throw new Error("Перемещение уже обработано");
@@ -81,7 +82,7 @@ router.post("/transfers/:id/reject", requireAuth(), async (req: Request, res: Re
   if (!scope) { res.status(403).json({ error: "Пользователь не настроен" }); return; }
   const id = Number(req.params.id);
   try {
-    const transfer = await db.transaction(async (tx) => {
+    const transfer = await db.transaction(async (tx) => { await moveContext(tx, "transfer_return", id, req.auth?.userId); 
       const [row] = await tx.select().from(transfersTable).where(eq(transfersTable.id, id));
       if (!row) throw new Error("Перемещение не найдено");
       if (row.status !== "pending") throw new Error("Перемещение уже обработано");

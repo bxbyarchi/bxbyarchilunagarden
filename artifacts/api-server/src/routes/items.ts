@@ -6,6 +6,7 @@ import { logAudit } from "../lib/auditLogger";
 import { requireRole } from "../middleware/rbac";
 import { sendLowStockAlert } from "../lib/telegramBot";
 import { getWarehouseScope, locationExists, isWarehouseAdmin } from "../lib/warehouseScope";
+import { moveContext } from "../lib/stock";
 
 const router: IRouter = Router();
 
@@ -61,7 +62,7 @@ router.post("/items", requireAuth(), requireRole("warehouse_chief"), async (req:
   const warehouseId = await resolveLocationId(req, locationId);
   if (!warehouseId) { res.status(400).json({ error: "Не найден склад для начального остатка" }); return; }
 
-  const row = await db.transaction(async (tx) => {
+  const row = await db.transaction(async (tx) => { await moveContext(tx, "item_create", null, req.auth?.userId); 
     const [created] = await tx.insert(itemsTable).values({
       name, categoryId: Number(categoryId), unit: unit ?? "шт", location: location ?? null, notes,
       currentStock: String(stock), minThreshold: minThreshold != null ? String(minThreshold) : null,
@@ -108,7 +109,7 @@ router.patch("/items/:id", requireAuth(), requireRole("warehouse_chief"), async 
   if (notes !== undefined) updates.notes = notes;
 
   const warehouseId = await resolveLocationId(req, locationId);
-  const row = await db.transaction(async (tx) => {
+  const row = await db.transaction(async (tx) => { await moveContext(tx, "manual_adjust", id, req.auth?.userId); 
     const [updated] = await tx.update(itemsTable).set(updates).where(eq(itemsTable.id, id)).returning();
     if (!updated) return null;
     if (currentStock !== undefined) {

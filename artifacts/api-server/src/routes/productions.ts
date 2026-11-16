@@ -9,7 +9,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { logAudit } from "../lib/auditLogger";
 import { getWarehouseScope, canAccessLocation, isWarehouseAdmin } from "../lib/warehouseScope";
 import { loadGraph } from "../lib/techCardGraph";
-import { addStock, type Tx } from "../lib/stock";
+import { moveContext, addStock, type Tx } from "../lib/stock";
 import { convert, rawRequirements, stockUnitFor, weightedPrice, type ItemInfo } from "../lib/techCardMath";
 
 const router: IRouter = Router();
@@ -126,7 +126,7 @@ router.post("/productions", requireAuth(), requireRole("warehouse"), handle(asyn
   if (actualRaw > p.plannedOutput * 1.5) throw new HttpError(400, `Фактический выход намного больше планового (${p.plannedOutput} ${p.outputUnit}) — проверьте число`);
   const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 1000) : null;
 
-  const production = await db.transaction(async (tx) => {
+  const production = await db.transaction(async (tx) => { await moveContext(tx, "production_out", null, req.auth?.userId); 
     // Re-read stock under row locks: another act/sale may have run since the preview.
     const locked = await lockStock(tx, input.departmentId, p.lines.map((l) => l.itemId));
     const short = p.lines.filter((l) => (locked.get(l.itemId) ?? 0) + 1e-9 < l.qty)
@@ -146,11 +146,13 @@ router.post("/productions", requireAuth(), requireRole("warehouse"), handle(asyn
     await tx.insert(productionLinesTable).values(p.lines.map((l) => ({
       productionId: created.id, itemId: l.itemId, qty: String(l.qty), unitPrice: String(l.unitPrice), cost: String(l.cost),
     })));
+    await moveContext(tx, "production_out", created.id, req.auth?.userId);
     for (const l of p.lines) await addStock(tx, l.itemId, input.departmentId, -l.qty);
 
     // New price of the semi: weighted average of what was in stock and this batch.
     const newPrice = weightedPrice(outItem.currentStock, outItem.pricePerUnit, outQty, unitCost);
     await tx.update(itemsTable).set({ pricePerUnit: String(round(newPrice, 2)) }).where(eq(itemsTable.id, outItem.id));
+    await moveContext(tx, "production_in", created.id, req.auth?.userId);
     await addStock(tx, outItem.id, input.departmentId, outQty);
     return created;
   });
@@ -167,7 +169,7 @@ router.post("/productions/:id/cancel", requireAuth(), requireRole("manager"), ha
   if (existing.status === "cancelled") throw new HttpError(409, "Акт уже отменён");
   await checkDepartment(req, existing.departmentId);
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx) => { await moveContext(tx, "production_cancel", id, req.auth?.userId); 
     const outQty = Number(existing.outputItemQty);
     const locked = await lockStock(tx, existing.departmentId, [existing.outputItemId]);
     const have = locked.get(existing.outputItemId) ?? 0;

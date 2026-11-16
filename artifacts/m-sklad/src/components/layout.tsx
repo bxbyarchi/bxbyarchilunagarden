@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { useSignOut, BRAND_NAME } from "@/hooks/useAuthState";
-import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact } from "lucide-react";
+import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/roles";
 
@@ -25,6 +25,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Аренда", href: "/rentals", icon: KeyRound, testId: "rentals" },
     { name: "Контрагенты", href: "/counterparties", icon: Contact, testId: "counterparties" },
     { name: "Сотрудники", href: "/staff", icon: Users, roles: ["super_admin", "warehouse_chief", "manager"], testId: "staff" },
+    { name: "Сводные отчёты", href: "/summary-reports", icon: BarChart3, testId: "summary-reports" },
     { name: "Отчёты", href: "/reports", icon: FileBarChart, roles: ["super_admin", "warehouse_chief"], testId: "reports" },
     { name: "Журнал аудита", href: "/audit-log", icon: History, roles: ["super_admin"], testId: "audit-log" },
   ];

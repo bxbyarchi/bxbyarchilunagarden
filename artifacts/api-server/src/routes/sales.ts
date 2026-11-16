@@ -4,7 +4,7 @@ import { db, salesTable, saleItemsTable, shiftsTable, registersTable, housesTabl
 import { eq, and, sql, inArray, gt } from "drizzle-orm";
 import { loadGraph, loadMoreItems } from "../lib/techCardGraph";
 import { saleWriteOffs, restockShare, refundAmount, type WriteOff } from "../lib/saleWriteOff";
-import { addStock } from "../lib/stock";
+import { moveContext, addStock } from "../lib/stock";
 import { logAudit } from "../lib/auditLogger";
 import { requireVenueRole } from "../middleware/rbac";
 import { getWarehouseScope } from "../lib/warehouseScope";
@@ -119,7 +119,7 @@ router.post("/sales", requireAuth(), requireVenueRole("cashier"), async (req: Re
   const discountAmount = round2(subtotalAmount * (discPct / 100));
   const totalAmount = round2(subtotalAmount - discountAmount);
 
-  const sale = await db.transaction(async (tx) => {
+  const sale = await db.transaction(async (tx) => { await moveContext(tx, "sale", null, req.auth?.userId); 
     const [createdSale] = await tx.insert(salesTable).values({
       shiftId: shift.id,
       registerId: shift.registerId,
@@ -132,6 +132,7 @@ router.post("/sales", requireAuth(), requireVenueRole("cashier"), async (req: Re
       createdByClerkId: req.auth?.userId,
     }).returning();
 
+    await moveContext(tx, "sale", createdSale.id, req.auth?.userId);
     const saleItems = await tx.insert(saleItemsTable).values(lines.map((l) => ({
       saleId: createdSale.id,
       productId: l.productId,
@@ -190,7 +191,7 @@ router.post("/sales/:id/returns", requireAuth(), requireVenueRole("cashier"), as
 
   let result: { totalReturnAmount: number; status: string };
   try {
-    result = await db.transaction(async (tx) => {
+    result = await db.transaction(async (tx) => { await moveContext(tx, "sale_return", saleId, req.auth?.userId); 
       let totalReturnAmount = 0;
       for (const it of items) {
         const [saleItem] = await tx.select().from(saleItemsTable).where(and(eq(saleItemsTable.id, it.saleItemId), eq(saleItemsTable.saleId, saleId))).for("update");

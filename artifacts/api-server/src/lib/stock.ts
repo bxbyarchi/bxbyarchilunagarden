@@ -1,4 +1,4 @@
-import { db, itemsTable, warehouseStockTable } from "@workspace/db";
+import { db, itemsTable, warehouseStockTable, type StockMoveKind } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -19,4 +19,14 @@ export async function addStock(tx: Tx, itemId: number, locationId: number, delta
   await tx.insert(warehouseStockTable).values({ itemId, locationId, currentStock: String(delta) })
     .onConflictDoUpdate({ target: [warehouseStockTable.itemId, warehouseStockTable.locationId], set: { currentStock: sql`CAST(${warehouseStockTable.currentStock} AS DECIMAL) + ${delta}` } });
   await refreshItemTotal(tx, itemId);
+}
+
+/**
+ * Labels the stock changes of the current transaction for the ledger (the
+ * warehouse_stock trigger reads these settings). Transaction-local: call it
+ * inside db.transaction, before the stock updates. Call again to change the
+ * label mid-transaction (e.g. production: ingredients out, then product in).
+ */
+export async function moveContext(tx: Tx, kind: StockMoveKind, refId?: number | null, userId?: string | null) {
+  await tx.execute(sql`SELECT set_config('lg.move_kind', ${kind}, true), set_config('lg.move_ref', ${refId != null ? String(refId) : ""}, true), set_config('lg.user', ${userId ?? ""}, true)`);
 }

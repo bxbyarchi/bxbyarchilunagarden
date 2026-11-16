@@ -8,6 +8,7 @@ import { requireRole } from "../middleware/rbac";
 import { sendLowStockAlert } from "../lib/telegramBot";
 import { getWarehouseScope, canAccessLocation, locationExists, isWarehouseAdmin } from "../lib/warehouseScope";
 import { auditLineMath, auditTotals } from "../lib/inventoryMath";
+import { moveContext } from "../lib/stock";
 
 const router: IRouter = Router();
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -202,7 +203,7 @@ router.post("/inventory-audits/:id/submit", requireAuth(), requireRole("manager"
   const totals = auditTotals(counted.map((l) => auditLineMath(Number(l.systemStock), Number(l.actualStock), Number(l.unitPrice))));
 
   const lowStock: Array<{ name: string; unit: string; stock: number; min: number }> = [];
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx) => { await moveContext(tx, "inventory", audit.id, req.auth?.userId); 
     const [claimed] = await tx.update(inventoryAuditsTable).set({
       status: "submitted", submittedAt: new Date(), submittedByClerkId: req.auth?.userId ?? null,
       shortageValue: String(totals.shortageValue), surplusValue: String(totals.surplusValue),
