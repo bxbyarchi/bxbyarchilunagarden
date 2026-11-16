@@ -29,6 +29,8 @@ import Productions from "@/pages/productions";
 import SalesMargin from "@/pages/sales-margin";
 import Counterparties, { CounterpartyCard } from "@/pages/counterparties";
 import SummaryReports from "@/pages/summary-reports";
+import Bookings from "@/pages/bookings";
+import Guests, { GuestCard } from "@/pages/guests";
 import { AppLayout } from "@/components/layout";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { AppRole } from "@/hooks/useCurrentUser";
@@ -106,6 +108,9 @@ function Routes() {
       <Route path="/counterparties"><ProtectedRoute component={Counterparties} /></Route>
       <Route path="/counterparties/:id"><ProtectedRoute component={CounterpartyCard} /></Route>
       <Route path="/summary-reports"><ProtectedRoute component={SummaryReports} /></Route>
+      <Route path="/bookings"><ProtectedRoute component={Bookings} /></Route>
+      <Route path="/guests"><ProtectedRoute component={Guests} /></Route>
+      <Route path="/guests/:id"><ProtectedRoute component={GuestCard} /></Route>
       <Route path="/transfers"><ProtectedRoute component={Transfers} /></Route>
       <Route path="/houses"><RoleProtectedRoute component={Houses} minRole="location_admin" domain="venue" /></Route>
       <Route path="/registers"><RoleProtectedRoute component={Registers} minRole="location_admin" domain="venue" /></Route>

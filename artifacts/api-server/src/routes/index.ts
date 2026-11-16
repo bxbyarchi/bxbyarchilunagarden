@@ -31,6 +31,7 @@ import productionsRouter from "./productions";
 import salesMarginRouter from "./salesMargin";
 import counterpartiesRouter from "./counterparties";
 import stockReportsRouter from "./stockReports";
+import bookingsRouter from "./bookings";
 
 const router: IRouter = Router();
 
@@ -54,6 +55,7 @@ router.use(productionsRouter);
 router.use(salesMarginRouter);
 router.use(counterpartiesRouter);
 router.use(stockReportsRouter);
+router.use(bookingsRouter);
 router.use(categoriesRouter);
 router.use(itemsRouter);
 router.use(receiptsRouter);

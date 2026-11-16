@@ -119,3 +119,21 @@ export async function sendLowStockAlert(itemName:string,currentStock:number,minT
 export async function sendHozkaLowStockAlert(itemName:string,currentStock:number,unit:string):Promise<void>{if(!bot)return;try{const admins=await db.select({telegramChatId:usersTable.telegramChatId}).from(usersTable).where(inArray(usersTable.role,WAREHOUSE_ADMIN_ROLES));const qty=`${Number(currentStock).toFixed(Number.isInteger(currentStock)?0:2)} ${unit}`,text=`⚠️ *Хозтовары на исходе!*\n\n*${itemName}* осталось всего *${qty}*.\n\nНужно дополнить склад при следующем закупе.`;for(const a of admins){if(a.telegramChatId)await bot.telegram.sendMessage(Number(a.telegramChatId),text,{parse_mode:"Markdown"});}}catch(err){logger.error({err},"sendHozkaLowStockAlert error");}}
 export async function sendOverdueRentalAlert(itemName:string,renterName:string,renterPhone:string|null,plannedReturnAt:Date,quantity:number,itemUnit:string):Promise<void>{if(!bot)return;try{const admins=await db.select({telegramChatId:usersTable.telegramChatId}).from(usersTable).where(inArray(usersTable.role,WAREHOUSE_ADMIN_ROLES));const dateStr=plannedReturnAt.toLocaleDateString("ru-RU"),phone=renterPhone?`\nТелефон: ${renterPhone}`:"",text=`🔴 *Просрочена аренда*\n\n*Товар:* ${itemName} × ${quantity} ${itemUnit}\n*Арендатор:* ${renterName}${phone}\n*Планируемый возврат:* ${dateStr}`;for(const a of admins){if(a.telegramChatId)await bot.telegram.sendMessage(Number(a.telegramChatId),text,{parse_mode:"Markdown"});}}catch(err){logger.error({err},"sendOverdueRentalAlert error");}}
 async function checkOverdueRentals():Promise<void>{if(!bot)return;try{const now=new Date(),rows=await db.select({renterName:rentalsTable.renterName,renterPhone:rentalsTable.renterPhone,plannedReturnAt:rentalsTable.plannedReturnAt,quantity:rentalsTable.quantity,itemName:itemsTable.name,itemUnit:itemsTable.unit}).from(rentalsTable).leftJoin(itemsTable,eq(rentalsTable.itemId,itemsTable.id)).where(and(eq(rentalsTable.status,"active"),lt(rentalsTable.plannedReturnAt,now)));for(const r of rows)await sendOverdueRentalAlert(r.itemName??"Unknown",r.renterName,r.renterPhone??null,r.plannedReturnAt,Number(r.quantity),r.itemUnit??"");}catch(err){logger.error({err},"checkOverdueRentals error");}}
+
+/**
+ * Plain-text notification to staff with the given roles who linked Telegram.
+ * No Markdown: guest names and comments come from outside and would break it.
+ * Returns how many staff were notified (0 when the bot isn't configured).
+ */
+export async function notifyStaff(text: string, roles: string[] = ["super_admin", "location_admin", "manager"]): Promise<number> {
+  if (!bot) return 0;
+  let sent = 0;
+  try {
+    const staff = await db.select({ chatId: usersTable.telegramChatId }).from(usersTable).where(inArray(usersTable.role, roles));
+    for (const s of staff) {
+      if (!s.chatId) continue;
+      try { await bot.telegram.sendMessage(Number(s.chatId), text); sent++; } catch (err) { logger.warn({ err }, "notifyStaff: send failed"); }
+    }
+  } catch (err) { logger.error({ err }, "notifyStaff error"); }
+  return sent;
+}
