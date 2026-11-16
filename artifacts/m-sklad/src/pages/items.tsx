@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UNITS } from "@/lib/units";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,6 +22,7 @@ import { Search, Plus, Edit, Trash2, AlertTriangle, ImageOff, X } from "lucide-r
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { PhotoUploader } from "@/components/PhotoUploader";
+const UNIT_HINT: Record<string, string> = { "г": "г — граммы", "кг": "кг — килограммы", "мл": "мл — миллилитры", "л": "л — литры", "шт": "шт — штуки" };
 
 const itemSchema = z.object({
   name: z.string().min(1, "Название обязательно"),
@@ -373,7 +375,16 @@ export default function Items() {
                   <FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="unit" render={({ field }) => (
-                  <FormItem><FormLabel>Ед. изм.</FormLabel><FormControl><Input placeholder="шт" {...field} data-testid="input-item-unit" /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Ед. учёта</FormLabel>
+                    <Select value={field.value || "шт"} onValueChange={field.onChange}>
+                      <FormControl><SelectTrigger data-testid="input-item-unit"><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {UNITS.map((u) => <SelectItem key={u} value={u}>{UNIT_HINT[u]}</SelectItem>)}
+                        {field.value && !(UNITS as readonly string[]).includes(field.value) && <SelectItem value={field.value}>{field.value} (старая единица)</SelectItem>}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Цена и остаток — за эту единицу. В тех-картах можно указывать в г/мл — пересчёт автоматический.</p>
+                    <FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="location" render={({ field }) => (
                   <FormItem><FormLabel>Расположение</FormLabel><FormControl><Input placeholder="Зал, кладовая..." {...field} data-testid="input-item-location" /></FormControl><FormMessage /></FormItem>

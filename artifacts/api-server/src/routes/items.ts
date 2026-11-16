@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/requireAuth";
-import { db, itemsTable, categoriesTable, warehouseStockTable, locationsTable } from "@workspace/db";
+import { db, itemsTable, categoriesTable, warehouseStockTable, locationsTable, techCardIngredientsTable, techCardsTable } from "@workspace/db";
 import { eq, sql, and, ilike, asc } from "drizzle-orm";
 import { logAudit } from "../lib/auditLogger";
 import { requireRole } from "../middleware/rbac";
@@ -130,6 +130,10 @@ router.patch("/items/:id", requireAuth(), requireRole("warehouse_chief"), async 
 
 router.delete("/items/:id", requireAuth(), requireRole("warehouse_chief"), async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  const usedIn = await db.select({ name: techCardsTable.name }).from(techCardIngredientsTable)
+    .innerJoin(techCardsTable, eq(techCardIngredientsTable.techCardId, techCardsTable.id))
+    .where(eq(techCardIngredientsTable.itemId, id));
+  if (usedIn.length) { res.status(409).json({ error: `Позиция используется в тех-картах: ${[...new Set(usedIn.map((u) => u.name))].join(", ")}` }); return; }
   const [row] = await db.delete(itemsTable).where(eq(itemsTable.id, id)).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   await logAudit({ action: "delete", entityType: "item", entityId: id, clerkUserId: req.auth?.userId });

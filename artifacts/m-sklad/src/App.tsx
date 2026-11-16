@@ -24,6 +24,7 @@ import KassaDashboard from "@/pages/kassa-dashboard";
 import KassaReports from "@/pages/kassa-reports";
 import KassaCosting from "@/pages/kassa-costing";
 import { LoginPage, SetupPage } from "@/pages/login";
+import { TechCardsList, TechCardDetail, TechCardEditor } from "@/pages/tech-cards";
 import { AppLayout } from "@/components/layout";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { AppRole } from "@/hooks/useCurrentUser";
@@ -93,6 +94,10 @@ function Routes() {
       <Route path="/setup"><PublicOnly component={SetupPage} /></Route>
       <Route path="/dashboard"><ProtectedRoute component={Dashboard} /></Route>
       <Route path="/items"><ProtectedRoute component={Items} /></Route>
+      <Route path="/tech-cards"><ProtectedRoute component={TechCardsList} /></Route>
+      <Route path="/tech-cards/new"><ProtectedRoute component={TechCardEditor} /></Route>
+      <Route path="/tech-cards/:id/edit"><ProtectedRoute component={TechCardEditor} /></Route>
+      <Route path="/tech-cards/:id"><ProtectedRoute component={TechCardDetail} /></Route>
       <Route path="/transfers"><ProtectedRoute component={Transfers} /></Route>
       <Route path="/houses"><RoleProtectedRoute component={Houses} minRole="location_admin" domain="venue" /></Route>
       <Route path="/registers"><RoleProtectedRoute component={Registers} minRole="location_admin" domain="venue" /></Route>

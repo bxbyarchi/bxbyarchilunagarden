@@ -78,6 +78,13 @@
       "when": 1794816233840,
       "tag": "0010_round_sharon_ventura",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794817795310,
+      "tag": "0011_mighty_karen_page",
+      "breakpoints": true
     }
   ]
 }

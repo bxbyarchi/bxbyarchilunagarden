@@ -19,3 +19,4 @@ export * from "./products";
 export * from "./productRecipeItems";
 export * from "./cashMovements";
 export * from "./sessions";
+export * from "./techCards";
