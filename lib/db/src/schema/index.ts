@@ -24,3 +24,4 @@ export * from "./productions";
 export * from "./counterparties";
 export * from "./stockLedger";
 export * from "./guests";
+export * from "./aiAgent";
