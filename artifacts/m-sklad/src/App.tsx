@@ -9,7 +9,7 @@ import Items from "@/pages/items";
 import Categories from "@/pages/categories";
 import Receipts from "@/pages/receipts";
 import WriteOffs from "@/pages/write-offs";
-import InventoryAudits from "@/pages/inventory-audits";
+import InventoryAudits, { InventoryAuditSheet } from "@/pages/inventory-audits";
 import Staff from "@/pages/staff";
 import AuditLog from "@/pages/audit-log";
 import Settings from "@/pages/settings";
@@ -111,6 +111,7 @@ function Routes() {
       <Route path="/receipts"><ProtectedRoute component={Receipts} /></Route>
       <Route path="/write-offs"><RoleProtectedRoute component={WriteOffs} minRole="accountant" /></Route>
       <Route path="/inventory-audits"><ProtectedRoute component={InventoryAudits} /></Route>
+      <Route path="/inventory-audits/:id"><ProtectedRoute component={InventoryAuditSheet} /></Route>
       <Route path="/rentals"><ProtectedRoute component={Rentals} /></Route>
       <Route path="/staff"><RoleProtectedRoute component={Staff} minRole="manager" /></Route>
       <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
