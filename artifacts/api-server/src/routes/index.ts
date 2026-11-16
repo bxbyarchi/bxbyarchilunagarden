@@ -29,6 +29,7 @@ import cashMovementsRouter from "./cashMovements";
 import techCardsRouter from "./techCards";
 import productionsRouter from "./productions";
 import salesMarginRouter from "./salesMargin";
+import counterpartiesRouter from "./counterparties";
 
 const router: IRouter = Router();
 
@@ -50,6 +51,7 @@ router.use(cashMovementsRouter);
 router.use(techCardsRouter);
 router.use(productionsRouter);
 router.use(salesMarginRouter);
+router.use(counterpartiesRouter);
 router.use(categoriesRouter);
 router.use(itemsRouter);
 router.use(receiptsRouter);

@@ -21,3 +21,4 @@ export * from "./cashMovements";
 export * from "./sessions";
 export * from "./techCards";
 export * from "./productions";
+export * from "./counterparties";

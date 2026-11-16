@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import {
   useListReceipts, useCreateReceipt, useListItems, useUpdateReceipt, useDeleteReceipt,
   getListReceiptsQueryKey, getListItemsQueryKey,
@@ -19,6 +20,7 @@ import { z } from "zod";
 import { Plus, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PhotoUploader } from "@/components/PhotoUploader";
+import { SupplierPicker } from "@/components/SupplierPicker";
 
 const receiptSchema = z.object({
   itemId: z.string().min(1, "Позиция обязательна"),
@@ -26,6 +28,7 @@ const receiptSchema = z.object({
   quantity: z.string().min(1, "Количество обязательно"),
   pricePerUnit: z.string().min(1, "Цена обязательна"),
   supplier: z.string().optional(),
+  counterpartyId: z.number().nullable().optional(),
   notes: z.string().optional(),
   photoUrls: z.array(z.string()).default([]),
 });
@@ -35,6 +38,7 @@ const editReceiptSchema = z.object({
   quantity: z.string().min(1, "Количество обязательно"),
   pricePerUnit: z.string().min(1, "Цена обязательна"),
   supplier: z.string().optional(),
+  counterpartyId: z.number().nullable().optional(),
   notes: z.string().optional(),
   photoUrls: z.array(z.string()).default([]),
 });
@@ -50,6 +54,7 @@ type Receipt = {
   pricePerUnit: number | string;
   totalCost: number | string;
   supplier?: string | null;
+  counterpartyId?: number | null;
   photoUrl?: string | null;
   photoUrls?: string[] | null;
   notes?: string | null;
@@ -110,32 +115,32 @@ export default function Receipts() {
 
   const form = useForm<ReceiptFormData>({
     resolver: zodResolver(receiptSchema),
-    defaultValues: { itemId: "", locationId: "", quantity: "", pricePerUnit: "", supplier: "", notes: "", photoUrls: [] },
+    defaultValues: { itemId: "", locationId: "", quantity: "", pricePerUnit: "", supplier: "", counterpartyId: null, notes: "", photoUrls: [] },
   });
-  const editForm = useForm<EditReceiptFormData>({ resolver: zodResolver(editReceiptSchema), defaultValues: { quantity: "", pricePerUnit: "", supplier: "", notes: "", photoUrls: [] } });
+  const editForm = useForm<EditReceiptFormData>({ resolver: zodResolver(editReceiptSchema), defaultValues: { quantity: "", pricePerUnit: "", supplier: "", counterpartyId: null, notes: "", photoUrls: [] } });
   const selectedItemId = form.watch("itemId");
   const selectedItem = (items as ItemOption[] | undefined)?.find((i) => String(i.id) === selectedItemId);
 
   function openCreateDialog() {
     const firstLocation = locations?.find((l) => l.isActive);
-    form.reset({ itemId: "", locationId: firstLocation ? String(firstLocation.id) : "", quantity: "", pricePerUnit: "", supplier: "", notes: "", photoUrls: [] });
+    form.reset({ itemId: "", locationId: firstLocation ? String(firstLocation.id) : "", quantity: "", pricePerUnit: "", supplier: "", counterpartyId: null, notes: "", photoUrls: [] });
     setOpen(true);
   }
 
   function onSubmit(data: ReceiptFormData) {
-    create.mutate({ data: { itemId: Number(data.itemId), locationId: Number(data.locationId), quantity: Number(data.quantity), pricePerUnit: Number(data.pricePerUnit), supplier: data.supplier || null, notes: data.notes || null, photoUrl: data.photoUrls[0] ?? null, photoUrls: data.photoUrls } }, {
+    create.mutate({ data: { itemId: Number(data.itemId), locationId: Number(data.locationId), quantity: Number(data.quantity), pricePerUnit: Number(data.pricePerUnit), supplier: data.supplier || null, counterpartyId: data.counterpartyId ?? null, notes: data.notes || null, photoUrl: data.photoUrls[0] ?? null, photoUrls: data.photoUrls } as Parameters<typeof create.mutate>[0]["data"] }, {
       onSuccess: () => { toast({ title: "Поступление зарегистрировано" }); queryClient.invalidateQueries({ queryKey: getListReceiptsQueryKey() }); queryClient.invalidateQueries({ queryKey: getListItemsQueryKey() }); setOpen(false); },
       onError: () => toast({ title: "Ошибка", variant: "destructive" }),
     });
   }
 
   function openEditDialog(r: Receipt) {
-    editForm.reset({ quantity: String(Number(r.quantity)), pricePerUnit: String(Number(r.pricePerUnit)), supplier: r.supplier ?? "", notes: r.notes ?? "", photoUrls: getPhotoUrls(r) });
+    editForm.reset({ quantity: String(Number(r.quantity)), pricePerUnit: String(Number(r.pricePerUnit)), supplier: r.supplier ?? "", counterpartyId: r.counterpartyId ?? null, notes: r.notes ?? "", photoUrls: getPhotoUrls(r) });
     setEditReceipt(r);
   }
   function onEditSubmit(data: EditReceiptFormData) {
     if (!editReceipt) return;
-    update.mutate({ id: editReceipt.id, data: { quantity: Number(data.quantity), pricePerUnit: Number(data.pricePerUnit), supplier: data.supplier || null, notes: data.notes || null, photoUrl: data.photoUrls[0] ?? null, photoUrls: data.photoUrls } }, {
+    update.mutate({ id: editReceipt.id, data: { quantity: Number(data.quantity), pricePerUnit: Number(data.pricePerUnit), supplier: data.supplier || null, counterpartyId: data.counterpartyId ?? null, notes: data.notes || null, photoUrl: data.photoUrls[0] ?? null, photoUrls: data.photoUrls } as Parameters<typeof update.mutate>[0]["data"] }, {
       onSuccess: () => { toast({ title: "Поступление обновлено" }); queryClient.invalidateQueries({ queryKey: getListReceiptsQueryKey() }); queryClient.invalidateQueries({ queryKey: getListItemsQueryKey() }); setEditReceipt(null); },
       onError: () => toast({ title: "Ошибка при обновлении", variant: "destructive" }),
     });
@@ -166,7 +171,7 @@ export default function Receipts() {
             <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString("ru-RU")}</TableCell>
             <TableCell className="text-sm font-medium whitespace-nowrap">{r.locationName ?? "—"}</TableCell>
             <TableCell className="font-medium">{r.itemName ?? "—"}</TableCell>
-            <TableCell className="text-muted-foreground">{r.supplier ?? "—"}</TableCell>
+            <TableCell className="text-muted-foreground">{r.counterpartyId ? <Link href={`/counterparties/${r.counterpartyId}`} className="text-primary hover:underline">{r.supplier}</Link> : (r.supplier ?? "—")}</TableCell>
             <TableCell className="text-right">{Number(r.quantity).toFixed(2)}</TableCell><TableCell className="text-right">{Number(r.pricePerUnit).toFixed(2)} сом</TableCell><TableCell className="text-right font-semibold text-emerald-700">{Number(r.totalCost).toFixed(2)} сом</TableCell>
             <TableCell className="text-center"><PhotoThumbnail photos={photos} onClick={() => openLightbox(photos, 0)} receiptId={r.id} /></TableCell><TableCell className="text-sm text-muted-foreground whitespace-nowrap">{r.recordedByName ?? "—"}</TableCell>
             {!authLoading && canManage && <TableCell className="text-center"><div className="flex items-center justify-center gap-1">
@@ -186,7 +191,7 @@ export default function Receipts() {
         <FormField control={form.control} name="locationId" render={({ field }) => <FormItem><FormLabel>Склад *</FormLabel><Select value={field.value} onValueChange={field.onChange}><FormControl><SelectTrigger data-testid="select-receipt-location"><SelectValue placeholder="Выбрать склад" /></SelectTrigger></FormControl><SelectContent>{locations?.filter((l) => l.isActive).map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>} />
         <FormField control={form.control} name="itemId" render={({ field }) => <FormItem><FormLabel>Позиция *</FormLabel><Select value={field.value} onValueChange={(v) => { field.onChange(v); const item = (items as ItemOption[] | undefined)?.find((i) => String(i.id) === v); if (item) form.setValue("pricePerUnit", String(item.pricePerUnit)); }}><FormControl><SelectTrigger data-testid="select-receipt-item"><SelectValue placeholder="Выбрать позицию" /></SelectTrigger></FormControl><SelectContent>{(items as ItemOption[] | undefined)?.map((i) => <SelectItem key={i.id} value={String(i.id)}>{i.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>} />
         <div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="quantity" render={({ field }) => <FormItem><FormLabel>Количество{selectedItem ? ` (${selectedItem.unit})` : ""} *</FormLabel><FormControl><Input type="number" step="0.001" placeholder="0" {...field} data-testid="input-receipt-qty" /></FormControl><FormMessage /></FormItem>} /><FormField control={form.control} name="pricePerUnit" render={({ field }) => <FormItem><FormLabel>Цена за ед. (сом) *</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-receipt-price" /></FormControl><FormMessage /></FormItem>} /></div>
-        <FormField control={form.control} name="supplier" render={({ field }) => <FormItem><FormLabel>Поставщик</FormLabel><FormControl><Input placeholder="ООО Ромашка" {...field} data-testid="input-receipt-supplier" /></FormControl><FormMessage /></FormItem>} />
+        <FormField control={form.control} name="supplier" render={({ field }) => <FormItem><FormLabel>Поставщик</FormLabel><SupplierPicker testId="input-receipt-supplier" value={{ id: form.watch("counterpartyId") ?? null, name: field.value ?? "" }} onChange={(v) => { field.onChange(v.name); form.setValue("counterpartyId", v.id); }} /><FormMessage /></FormItem>} />
         <FormField control={form.control} name="notes" render={({ field }) => <FormItem><FormLabel>Примечания</FormLabel><FormControl><Input placeholder="Дополнительная информация" {...field} data-testid="input-receipt-notes" /></FormControl><FormMessage /></FormItem>} />
         <div className="space-y-2"><label className="text-sm font-medium leading-none">Фото поставки</label><PhotoUploader value={form.watch("photoUrls")} onChange={(paths) => form.setValue("photoUrls", paths)} label="Сфотографировать накладную" /></div>
         {form.watch("quantity") && form.watch("pricePerUnit") && <div className="rounded-lg bg-muted px-4 py-3 text-sm"><span className="text-muted-foreground">Итого: </span><span className="font-semibold">{(Number(form.watch("quantity")) * Number(form.watch("pricePerUnit"))).toFixed(2)} сом</span></div>}
@@ -195,7 +200,7 @@ export default function Receipts() {
 
       <Dialog open={editReceipt !== null} onOpenChange={(o) => { if (!o) setEditReceipt(null); }}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Редактировать поступление</DialogTitle></DialogHeader>{editReceipt && <div className="text-sm text-muted-foreground mb-2">Позиция: <span className="font-medium text-foreground">{editReceipt.itemName ?? "—"}</span></div>}<Form {...editForm}><form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-4"><FormField control={editForm.control} name="quantity" render={({ field }) => <FormItem><FormLabel>Количество *</FormLabel><FormControl><Input type="number" step="0.001" placeholder="0" {...field} data-testid="input-edit-receipt-qty" /></FormControl><FormMessage /></FormItem>} /><FormField control={editForm.control} name="pricePerUnit" render={({ field }) => <FormItem><FormLabel>Цена за ед. (сом) *</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-edit-receipt-price" /></FormControl><FormMessage /></FormItem>} /></div>
-        <FormField control={editForm.control} name="supplier" render={({ field }) => <FormItem><FormLabel>Поставщик</FormLabel><FormControl><Input placeholder="ООО Ромашка" {...field} data-testid="input-edit-receipt-supplier" /></FormControl><FormMessage /></FormItem>} />
+        <FormField control={editForm.control} name="supplier" render={({ field }) => <FormItem><FormLabel>Поставщик</FormLabel><SupplierPicker testId="input-edit-receipt-supplier" value={{ id: editForm.watch("counterpartyId") ?? null, name: field.value ?? "" }} onChange={(v) => { field.onChange(v.name); editForm.setValue("counterpartyId", v.id); }} /><FormMessage /></FormItem>} />
         <FormField control={editForm.control} name="notes" render={({ field }) => <FormItem><FormLabel>Примечания</FormLabel><FormControl><Input placeholder="Дополнительная информация" {...field} data-testid="input-edit-receipt-notes" /></FormControl><FormMessage /></FormItem>} />
         <div className="space-y-2"><label className="text-sm font-medium leading-none">Фото поставки</label><PhotoUploader value={editForm.watch("photoUrls")} onChange={(paths) => editForm.setValue("photoUrls", paths)} label="Сфотографировать накладную" /></div>
         {editForm.watch("quantity") && editForm.watch("pricePerUnit") && <div className="rounded-lg bg-muted px-4 py-3 text-sm"><span className="text-muted-foreground">Итого: </span><span className="font-semibold">{(Number(editForm.watch("quantity")) * Number(editForm.watch("pricePerUnit"))).toFixed(2)} сом</span></div>}

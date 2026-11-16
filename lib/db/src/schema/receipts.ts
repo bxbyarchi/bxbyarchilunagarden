@@ -2,6 +2,7 @@ import { pgTable, serial, text, timestamp, integer, numeric, json } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { itemsTable } from "./items";
+import { counterpartiesTable } from "./counterparties";
 import { locationsTable } from "./locations";
 
 export const receiptsTable = pgTable("receipts", {
@@ -12,6 +13,8 @@ export const receiptsTable = pgTable("receipts", {
   pricePerUnit: numeric("price_per_unit", { precision: 12, scale: 2 }).notNull(),
   totalCost: numeric("total_cost", { precision: 14, scale: 2 }).notNull(),
   supplier: text("supplier"),
+  // Поставщик из справочника; supplier хранит его название на момент прихода.
+  counterpartyId: integer("counterparty_id").references(() => counterpartiesTable.id, { onDelete: "set null" }),
   photoUrl: text("photo_url"),
   photoUrls: json("photo_urls").$type<string[]>().default([]),
   notes: text("notes"),
