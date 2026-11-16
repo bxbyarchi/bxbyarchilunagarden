@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { useSignOut, BRAND_NAME } from "@/hooks/useAuthState";
-import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat } from "lucide-react";
+import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/roles";
 
@@ -16,6 +16,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Аналитика", href: "/dashboard", icon: LayoutDashboard, testId: "dashboard" },
     { name: "Склад", href: "/items", icon: Package, testId: "items" },
     { name: "Тех-карты", href: "/tech-cards", icon: ChefHat, testId: "tech-cards" },
+    { name: "Производство", href: "/productions", icon: Factory, testId: "productions" },
     { name: "Перемещения", href: "/transfers", icon: Truck, testId: "transfers" },
     { name: "Категории", href: "/categories", icon: Tags, roles: ["super_admin", "warehouse_chief", "manager"], testId: "categories" },
     { name: "Поступления", href: "/receipts", icon: ArrowDownToLine, testId: "receipts" },

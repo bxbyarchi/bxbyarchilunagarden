@@ -20,6 +20,9 @@ export const techCardsTable = pgTable("tech_cards", {
   outputUnit: text("output_unit").notNull().default("г"),
   salePrice: numeric("sale_price", { precision: 12, scale: 2 }),
   technology: text("technology"),
+  // Полуфабрикат на складе: позиция, на которую приходуется результат акта
+  // производства. Создаётся автоматически при первом производстве.
+  outputItemId: integer("output_item_id").references(() => itemsTable.id, { onDelete: "set null" }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

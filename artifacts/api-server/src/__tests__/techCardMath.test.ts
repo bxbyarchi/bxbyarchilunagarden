@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   convert, normalizeUnit, unitsCompatible, netAndOutput, costCard, pricing,
-  rawRequirements, portionsAvailable, type CardInfo, type ItemInfo,
+  rawRequirements, portionsAvailable, weightedPrice, stockUnitFor, type CardInfo, type ItemInfo,
 } from "../lib/techCardMath";
 
 const items = new Map<number, ItemInfo>([
@@ -97,5 +97,28 @@ describe("portions from stock", () => {
     expect(r.portions).toBe(25);
     expect(r.limitingItemIds).toEqual([5]);
     expect(portionsAvailable(req, new Map([[3, 5]])).portions).toBe(0);
+  });
+});
+
+describe("semi-finished stock", () => {
+  it("takes a produced semi from its stock item instead of raw ingredients", () => {
+    const withStock = new Map(items);
+    withStock.set(99, { id: 99, name: "Соус (п/ф)", unit: "л", pricePerUnit: 500 });
+    const cards = new Map([
+      [50, { ...card(50, "semi", 1000, "мл", [ing({ itemId: 3, grossQty: 1, unit: "л" })]), outputItemId: 99 }],
+      [51, card(51, "dish", 50, "мл", [ing({ itemId: 5, grossQty: 40, unit: "мл" }), ing({ semiCardId: 50, grossQty: 10, unit: "мл" })])],
+    ]);
+    const req = rawRequirements(51, cards, withStock);
+    expect(req.get(99)).toBeCloseTo(0.01);
+    expect(req.has(3)).toBe(false);
+  });
+
+  it("weighted average price and stock unit", () => {
+    expect(weightedPrice(2, 100, 2, 200)).toBe(150);
+    expect(weightedPrice(0, 100, 3, 200)).toBe(200);
+    expect(weightedPrice(-1, 100, 1, 50)).toBe(50);
+    expect(stockUnitFor("мл")).toBe("л");
+    expect(stockUnitFor("г")).toBe("кг");
+    expect(stockUnitFor("шт")).toBe("шт");
   });
 });

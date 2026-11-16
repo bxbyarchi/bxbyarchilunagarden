@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Plus, Trash2, Printer, Pencil, ArrowLeft, AlertTriangle, ChevronsUpDown, Search } from "lucide-react";
+import { Plus, Trash2, Printer, Pencil, ArrowLeft, AlertTriangle, ChevronsUpDown, Search, Factory } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import AccessDenied from "@/components/AccessDenied";
@@ -218,6 +218,7 @@ export function TechCardDetail() {
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Button variant="ghost" onClick={() => setLocation("/tech-cards")}><ArrowLeft className="mr-2 h-4 w-4" />Все тех-карты</Button>
         <div className="flex gap-2">
+          {card.kind === "semi" && <Button onClick={() => setLocation(`/productions?new=${card.id}`)}><Factory className="mr-2 h-4 w-4" />Произвести</Button>}
           <Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />Печать</Button>
           {canEdit && <Button variant="outline" onClick={() => setLocation(`/tech-cards/${card.id}/edit`)}><Pencil className="mr-2 h-4 w-4" />Редактировать</Button>}
           {canEdit && <Button variant="ghost" className="text-destructive" onClick={remove}><Trash2 className="h-4 w-4" /></Button>}

@@ -77,6 +77,8 @@ export interface CardInfo {
   outputQty: number;
   outputUnit: string;
   salePrice: number | null;
+  /** Stock item the semi-finished product is produced into (null = never produced). */
+  outputItemId?: number | null;
   ingredients: IngredientInput[];
 }
 
@@ -154,8 +156,10 @@ export function pricing(cost: number, salePrice: number | null) {
 }
 
 /**
- * Raw stock needed for ONE portion, flattened through semi-finished cards:
- * itemId → quantity in the item's own unit.
+ * Stock needed for ONE portion (or one batch of a semi): itemId → quantity in
+ * the item's own unit. A semi-finished ingredient that has a stock item
+ * (it is produced in advance by a production act) is taken from that stock;
+ * one that has never been produced is expanded into its own ingredients.
  */
 export function rawRequirements(
   cardId: number,
@@ -176,7 +180,14 @@ export function rawRequirements(
         acc.set(item.id, (acc.get(item.id) ?? 0) + qty);
       } else if (ing.semiCardId != null) {
         const semi = cards.get(ing.semiCardId);
-        if (!semi || !(semi.outputQty > 0)) continue;
+        if (!semi) continue;
+        const stocked = semi.outputItemId != null ? items.get(semi.outputItemId) : undefined;
+        if (stocked) {
+          const qty = convert(ing.grossQty, ing.unit, stocked.unit) * factor;
+          acc.set(stocked.id, (acc.get(stocked.id) ?? 0) + qty);
+          continue;
+        }
+        if (!(semi.outputQty > 0)) continue;
         const batches = convert(ing.grossQty, ing.unit, semi.outputUnit) / semi.outputQty;
         rawRequirements(semi.id, cards, items, factor * batches, [...stack, cardId], acc);
       }
@@ -185,6 +196,20 @@ export function rawRequirements(
     }
   }
   return acc;
+}
+
+/** Stock unit for a semi-finished product's item: the larger unit of its family (г → кг, мл → л). */
+export function stockUnitFor(outputUnit: string): Unit {
+  const u = normalizeUnit(outputUnit) ?? "шт";
+  return u === "г" ? "кг" : u === "мл" ? "л" : u;
+}
+
+/** Weighted-average unit price after adding `addQty` at `addPrice` to `oldQty` at `oldPrice`. */
+export function weightedPrice(oldQty: number, oldPrice: number, addQty: number, addPrice: number): number {
+  const base = Math.max(oldQty, 0);
+  const total = base + addQty;
+  if (!(total > 0)) return addPrice;
+  return (base * oldPrice + addQty * addPrice) / total;
 }
 
 /**
