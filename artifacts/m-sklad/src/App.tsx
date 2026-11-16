@@ -11,6 +11,9 @@ import Receipts from "@/pages/receipts";
 import WriteOffs from "@/pages/write-offs";
 import InventoryAudits, { InventoryAuditSheet } from "@/pages/inventory-audits";
 import Staff from "@/pages/staff";
+import Schedule from "@/pages/schedule";
+import Timesheet from "@/pages/timesheet";
+import Kiosk from "@/pages/kiosk";
 import AuditLog from "@/pages/audit-log";
 import Settings from "@/pages/settings";
 import Rentals from "@/pages/rentals";
@@ -84,6 +87,14 @@ function RoleProtectedRoute({ component, minRole, domain }: { component: React.C
   return <RoleCheck component={component} minRole={minRole} domain={domain} />;
 }
 
+// The check-in kiosk runs full screen on a tablet at the staff entrance — no sidebar.
+function KioskRoute() {
+  const { isLoading, isSignedIn } = useAuthState();
+  if (isLoading) return <Spinner />;
+  if (!isSignedIn) return <SignedOutRedirect />;
+  return <Kiosk />;
+}
+
 function OnboardingPage() {
   const { isLoading, isSignedIn } = useAuthState();
   if (isLoading) return <Spinner />;
@@ -127,7 +138,10 @@ function Routes() {
       <Route path="/inventory-audits"><ProtectedRoute component={InventoryAudits} /></Route>
       <Route path="/inventory-audits/:id"><ProtectedRoute component={InventoryAuditSheet} /></Route>
       <Route path="/rentals"><ProtectedRoute component={Rentals} /></Route>
-      <Route path="/staff"><RoleProtectedRoute component={Staff} minRole="manager" /></Route>
+      <Route path="/staff"><ProtectedRoute component={Staff} /></Route>
+      <Route path="/schedule"><ProtectedRoute component={Schedule} /></Route>
+      <Route path="/timesheet"><ProtectedRoute component={Timesheet} /></Route>
+      <Route path="/kiosk"><KioskRoute /></Route>
       <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
       <Route path="/reports"><RoleProtectedRoute component={Reports} minRole="warehouse_chief" /></Route>
       <Route path="/settings"><ProtectedRoute component={Settings} /></Route>

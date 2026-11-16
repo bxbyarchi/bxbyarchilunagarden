@@ -33,6 +33,7 @@ import counterpartiesRouter from "./counterparties";
 import stockReportsRouter from "./stockReports";
 import bookingsRouter from "./bookings";
 import aiAgentRouter from "./aiAgent";
+import personnelRouter from "./personnel";
 
 const router: IRouter = Router();
 
@@ -58,6 +59,7 @@ router.use(counterpartiesRouter);
 router.use(stockReportsRouter);
 router.use(bookingsRouter);
 router.use(aiAgentRouter);
+router.use(personnelRouter);
 router.use(categoriesRouter);
 router.use(itemsRouter);
 router.use(receiptsRouter);

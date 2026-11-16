@@ -10,6 +10,10 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-luna}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-luna}
+      DATA_DIR: /data
+    # Check-in photos and other files the server stores itself.
+    volumes:
+      - app-data:/data
     # Published only on localhost — Nginx on the host is the only thing that
     # should ever reach this port. Never 0.0.0.0:3000 here.
     ports:
@@ -60,3 +64,4 @@ services:
 
 volumes:
   postgres-data:
+  app-data:

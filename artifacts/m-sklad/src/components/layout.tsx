@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { useSignOut, BRAND_NAME } from "@/hooks/useAuthState";
-import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3, CalendarDays, UserRound, Bot } from "lucide-react";
+import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3, CalendarDays, UserRound, Bot, CalendarRange, Clock, ScanFace } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/roles";
 
@@ -24,7 +24,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Инвентаризация", href: "/inventory-audits", icon: ClipboardCheck, testId: "inventory-audits" },
     { name: "Аренда", href: "/rentals", icon: KeyRound, testId: "rentals" },
     { name: "Контрагенты", href: "/counterparties", icon: Contact, testId: "counterparties" },
-    { name: "Сотрудники", href: "/staff", icon: Users, roles: ["super_admin", "warehouse_chief", "manager"], testId: "staff" },
     { name: "Сводные отчёты", href: "/summary-reports", icon: BarChart3, testId: "summary-reports" },
     { name: "Отчёты", href: "/reports", icon: FileBarChart, roles: ["super_admin", "warehouse_chief"], testId: "reports" },
     { name: "Журнал аудита", href: "/audit-log", icon: History, roles: ["super_admin"], testId: "audit-log" },
@@ -39,6 +38,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Маржа продаж", href: "/sales-margin", icon: TrendingUp, roles: ["super_admin", "location_admin"], testId: "sales-margin" },
     { name: "Отчёты касс", href: "/kassa-reports", icon: FileBarChart, roles: ["super_admin", "location_admin"], testId: "kassa-reports" },
     { name: "Калькуляции", href: "/kassa-costing", icon: Calculator, roles: ["super_admin", "location_admin"], testId: "kassa-costing" },
+  ];
+  const PERSONNEL_ADMIN = ["super_admin", "warehouse_chief", "location_admin", "manager"];
+  const personnelNavigation = [
+    { name: "Сотрудники", href: "/staff", icon: Users, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "staff" },
+    { name: "График смен", href: "/schedule", icon: CalendarRange, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "schedule" },
+    { name: "Табель", href: "/timesheet", icon: Clock, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "timesheet" },
+    { name: "Киоск отметок", href: "/kiosk", icon: ScanFace, roles: [...PERSONNEL_ADMIN, "cashier"], testId: "kiosk" },
   ];
   const settingsItem = { name: "Настройки", href: "/settings", icon: Settings, testId: "settings" };
   const closeSidebar = () => setSidebarOpen(false);
@@ -56,12 +62,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="mx-3 mb-4 rounded-xl border border-sidebar-border bg-sidebar-accent/60 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-sidebar-foreground/70"><MapPin className="h-3.5 w-3.5" />{isVenueOnly ? "Площадка" : "Склад"}</div><div className="mt-2 text-sm font-semibold">{displayLocation}</div></div>
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto pb-4">
         {navigation.map((item) => { if (item.roles && user?.role && !item.roles.includes(user.role)) return null; const isActive = location === item.href; return <Link key={item.testId} href={item.href}><div className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-pointer transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"}`} data-testid={`nav-${item.testId}`} onClick={closeSidebar}><item.icon className="mr-3 h-5 w-5 flex-shrink-0" />{item.name}</div></Link>; })}
-        {venueNavigation.some((item) => !item.roles || (user?.role && item.roles.includes(user.role))) && (
-          <div className="pt-3 mt-3 border-t border-sidebar-border/60">
-            <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/40">Касса и зал</div>
-            {venueNavigation.map((item) => { if (item.roles && user?.role && !item.roles.includes(user.role)) return null; const isActive = location === item.href; return <Link key={item.testId} href={item.href}><div className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-pointer transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"}`} data-testid={`nav-${item.testId}`} onClick={closeSidebar}><item.icon className="mr-3 h-5 w-5 flex-shrink-0" />{item.name}</div></Link>; })}
+        {([["Касса и зал", venueNavigation], ["Персонал", personnelNavigation]] as const).map(([title, items]) => items.some((item) => !item.roles || (user?.role && item.roles.includes(user.role))) && (
+          <div key={title} className="pt-3 mt-3 border-t border-sidebar-border/60">
+            <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/40">{title}</div>
+            {items.map((item) => { if (item.roles && user?.role && !item.roles.includes(user.role)) return null; const isActive = location === item.href; return <Link key={item.testId} href={item.href}><div className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-pointer transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"}`} data-testid={`nav-${item.testId}`} onClick={closeSidebar}><item.icon className="mr-3 h-5 w-5 flex-shrink-0" />{item.name}</div></Link>; })}
           </div>
-        )}
+        ))}
         <div className="pt-3 mt-3 border-t border-sidebar-border/60">
           {(() => { const isActive = location === settingsItem.href; return <Link key={settingsItem.testId} href={settingsItem.href}><div className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-pointer transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"}`} data-testid={`nav-${settingsItem.testId}`} onClick={closeSidebar}><settingsItem.icon className="mr-3 h-5 w-5 flex-shrink-0" />{settingsItem.name}</div></Link>; })()}
         </div>

@@ -43,7 +43,8 @@ RUN find . -name node_modules -type d -prune -exec rm -rf {} + \
 FROM node:24-alpine AS runtime
 ENV COREPACK_HOME=/opt/corepack
 RUN corepack enable \
-  && addgroup -S app && adduser -S app -G app
+  && addgroup -S app && adduser -S app -G app \
+  && mkdir -p /data && chown app:app /data
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=prune /opt/corepack /opt/corepack

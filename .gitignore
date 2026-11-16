@@ -65,3 +65,7 @@ Thumbs.db
 # (project.zip, project_part_aa.., artifacts/m-sklad/public/code_clean.zip)
 *.zip
 project_part_*
+
+# Local server data (check-in photos etc.)
+/data
+artifacts/api-server/data
