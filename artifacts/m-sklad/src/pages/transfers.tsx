@@ -50,7 +50,7 @@ export default function Transfers() {
   const canAccept = (t: any) => t.status === "pending" && (isWarehouseAdmin(user?.role) || user?.locationId === t.toLocationId);
 
   return <div className="space-y-6">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">Перемещения</h1><p className="text-muted-foreground">Передача товара между складами «Северного сияния»</p></div><Button onClick={() => setFormOpen((v) => !v)}><Plus className="mr-2 h-4 w-4" />Создать перемещение</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">Перемещения</h1><p className="text-muted-foreground">Передача товара между складами «Luna Garden»</p></div><Button onClick={() => setFormOpen((v) => !v)}><Plus className="mr-2 h-4 w-4" />Создать перемещение</Button></div>
     {formOpen && <Card><CardHeader><CardTitle>Новое перемещение</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">
       <div className="space-y-2"><Label>Склад отправитель</Label><Select value={from} onValueChange={setFrom} disabled={!isWarehouseAdmin(user?.role)}><SelectTrigger><SelectValue placeholder="Выберите склад" /></SelectTrigger><SelectContent>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent></Select></div>
       <div className="space-y-2"><Label>Склад получатель</Label><Select value={to} onValueChange={setTo}><SelectTrigger><SelectValue placeholder="Выберите склад" /></SelectTrigger><SelectContent>{locations.filter((l) => String(l.id) !== from).map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent></Select></div>

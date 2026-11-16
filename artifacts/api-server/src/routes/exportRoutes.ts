@@ -92,7 +92,7 @@ router.get("/export/stock", requireAuth(), requireRole("warehouse_chief"), async
     .orderBy(categoriesTable.name, itemsTable.name);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Северное сияние";
+  wb.creator = "Luna Garden";
   wb.created = new Date();
   const sheet = wb.addWorksheet("Остатки");
   styleSheet(sheet, [
@@ -140,7 +140,7 @@ router.get("/export/write-offs", requireAuth(), requireRole("warehouse_chief"), 
     .orderBy(sql`${writeOffsTable.createdAt} DESC`);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Северное сияние";
+  wb.creator = "Luna Garden";
   wb.created = new Date();
   const sheet = wb.addWorksheet("Списания");
   styleSheet(sheet, [
@@ -311,13 +311,13 @@ router.get("/reports/full", requireAuth(), requireRole("warehouse_chief"), async
   }
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Северное сияние";
+  wb.creator = "Luna Garden";
   wb.created = new Date();
 
   const summarySheet = wb.addWorksheet("Итого");
   summarySheet.columns = [{ key: "label", width: 38 }, { key: "value", width: 22 }];
 
-  const titleRow = summarySheet.addRow(["Отчёт «Северное сияние»", ""]);
+  const titleRow = summarySheet.addRow(["Отчёт «Luna Garden»", ""]);
   summarySheet.mergeCells(titleRow.number, 1, titleRow.number, 2);
   titleRow.getCell(1).font = { bold: true, size: 16, color: { argb: `FF${BRAND_HEADER_FILL}` } };
   titleRow.height = 26;
@@ -416,7 +416,7 @@ router.get("/reports/full", requireAuth(), requireRole("warehouse_chief"), async
   const buf = await buildBuffer(wb);
   const dateTag = new Date().toISOString().slice(0, 10);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", `attachment; filename="msklad-report-${dateTag}.xlsx"`);
+  res.setHeader("Content-Disposition", `attachment; filename="lunagarden-report-${dateTag}.xlsx"`);
   res.send(buf);
 });
 
@@ -486,12 +486,12 @@ router.get("/export/kassa", requireAuth(), requireVenueRole("location_admin"), a
   const totalReturns = shiftRows.reduce((s, r) => s + Number(r.totalReturns), 0);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Северное сияние";
+  wb.creator = "Luna Garden";
   wb.created = new Date();
 
   const summarySheet = wb.addWorksheet("Итого");
   summarySheet.columns = [{ key: "label", width: 38 }, { key: "value", width: 22 }];
-  const titleRow = summarySheet.addRow(["Отчёт по кассам «Северное сияние»", ""]);
+  const titleRow = summarySheet.addRow(["Отчёт по кассам «Luna Garden»", ""]);
   summarySheet.mergeCells(titleRow.number, 1, titleRow.number, 2);
   titleRow.getCell(1).font = { bold: true, size: 16, color: { argb: `FF${BRAND_HEADER_FILL}` } };
   titleRow.height = 26;

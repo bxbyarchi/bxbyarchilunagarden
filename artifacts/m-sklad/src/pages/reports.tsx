@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { useAuth } from "@clerk/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import AccessDenied from "@/components/AccessDenied";
@@ -70,7 +69,6 @@ function getPresetDates(preset: Period): { from: string; to: string } {
 }
 
 export default function Reports() {
-  const { getToken } = useAuth();
   const { canDo, isLoading: roleLoading } = useCurrentUser();
   const [preset, setPreset] = useState<Period>("month");
   const [customFrom, setCustomFrom] = useState("");
@@ -98,11 +96,7 @@ export default function Reports() {
     queryKey: ["report-full", from, to, categoryId],
     enabled: canFetch,
     queryFn: async () => {
-      const token = await getToken();
-      const res = await fetch(
-        `${API}/reports/full?from=${from}&to=${to}&format=json${catParam}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await fetch(`${API}/reports/full?from=${from}&to=${to}&format=json${catParam}`);
       if (!res.ok) throw new Error("Ошибка загрузки отчёта");
       return res.json();
     },
@@ -111,17 +105,13 @@ export default function Reports() {
   async function downloadExcel() {
     setDownloading(true);
     try {
-      const token = await getToken();
-      const res = await fetch(
-        `${API}/reports/full?from=${from}&to=${to}&format=xlsx${catParam}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await fetch(`${API}/reports/full?from=${from}&to=${to}&format=xlsx${catParam}`);
       if (!res.ok) throw new Error("Ошибка генерации Excel");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `msklad-report-${categoryId !== "all" ? categoryId + "-" : ""}${from}-${to}.xlsx`;
+      a.download = `lunagarden-report-${categoryId !== "all" ? categoryId + "-" : ""}${from}-${to}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {

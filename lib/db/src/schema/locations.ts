@@ -15,15 +15,17 @@ export const insertLocationSchema = createInsertSchema(locationsTable).omit({ id
 export type InsertLocation = z.infer<typeof insertLocationSchema>;
 export type Location = typeof locationsTable.$inferSelect;
 
+// Restaurant departments, created on first launch. Storage-only departments
+// keep their own stock; isVenue marks a point of sale (kassa/shifts).
 export const DEFAULT_LOCATIONS = [
-  { name: "Бишкек — центральный", code: "BISHKEK_CENTRAL", isVenue: false },
-  { name: "Кой Таш", code: "KOI_TASH", isVenue: true },
-  { name: "Площадь", code: "PLOSHAD", isVenue: true },
-  { name: "Азия Молл", code: "ASIA_MALL", isVenue: true },
-  { name: "Скай Парк", code: "SKY_PARK", isVenue: true },
-  { name: "Ош", code: "OSH", isVenue: true },
-  { name: "Лермонтова", code: "LERMONTOVA", isVenue: false },
-  { name: "Прохладное", code: "PROKHLADNOE", isVenue: false },
+  { name: "Основной склад", code: "MAIN", isVenue: false },
+  { name: "Бар", code: "BAR", isVenue: false },
+  { name: "Кухня", code: "KITCHEN", isVenue: false },
+  { name: "Кондитерская", code: "PASTRY", isVenue: false },
+  { name: "Хозчасть", code: "HOUSEHOLD", isVenue: false },
+  { name: "Инструменты", code: "TOOLS", isVenue: false },
+  { name: "Стройматериалы", code: "BUILDING", isVenue: false },
+  { name: "Зал ресторана", code: "HALL", isVenue: true },
 ] as const;
 
 export const VENUE_LOCATION_CODES = DEFAULT_LOCATIONS.filter((l) => l.isVenue).map((l) => l.code);

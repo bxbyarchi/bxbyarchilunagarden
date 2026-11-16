@@ -1,11 +1,11 @@
 {
-  "name": "Северное сияние — Ярмарка",
-  "short_name": "Северное сияние",
-  "description": "Система управления ярмаркой «Северное сияние»",
+  "name": "Luna Garden — ресторан",
+  "short_name": "Luna Garden",
+  "description": "Система управления рестораном «Luna Garden»",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#8b1028",
-  "theme_color": "#8b1028",
+  "background_color": "#831F21",
+  "theme_color": "#831F21",
   "orientation": "portrait-primary",
   "icons": [
     {

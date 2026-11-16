@@ -21,6 +21,10 @@ beforeAll(async () => {
 // Exact method+path pairs that are public by design.
 const PUBLIC_ROUTES: Array<{ method: string; path: string }> = [
   { method: "GET", path: "/healthz" },
+  // Login flow: must work before a session exists.
+  { method: "GET", path: "/auth/status" },
+  { method: "POST", path: "/auth/setup" },
+  { method: "POST", path: "/auth/login" },
 ];
 
 // Path prefixes that are public by design (see storage.ts: public-objects is
@@ -91,5 +95,12 @@ describe("explicitly public endpoints stay reachable without a token", () => {
   it("GET /api/storage/public-objects/* does not require auth (404s on a missing file, not 401)", async () => {
     const res = await request(app).get("/api/storage/public-objects/does-not-exist.png");
     expect(res.status).not.toBe(401);
+  });
+});
+
+describe("a forged or unknown session cookie never authenticates", () => {
+  it("GET /api/auth/me with a garbage lg_session cookie -> 401", async () => {
+    const res = await request(app).get("/api/auth/me").set("Cookie", "lg_session=not-a-real-token");
+    expect(res.status).toBe(401);
   });
 });

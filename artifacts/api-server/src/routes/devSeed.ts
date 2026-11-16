@@ -53,7 +53,7 @@ router.post("/admin/seed-demo-data", requireAuth(), requireSuperAdmin(), sensiti
   const allLocations = await db.query.locationsTable.findMany();
   summary.locations = allLocations.length;
   const venues = allLocations.filter((l) => l.isVenue);
-  const central = allLocations.find((l) => l.code === "BISHKEK_CENTRAL");
+  const central = allLocations.find((l) => l.code === "MAIN");
 
   await db.insert(categoriesTable).values(CATEGORIES).onConflictDoNothing();
   const cats = await db.query.categoriesTable.findMany();

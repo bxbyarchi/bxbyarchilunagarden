@@ -206,7 +206,7 @@ export default function KassaReports() {
 
       {summary && (
         <div id="print-kassa-report" style={{ display: "none" }}>
-          <h1 style={{ margin: 0 }}>Северное сияние — Отчёт по кассам</h1>
+          <h1 style={{ margin: 0 }}>Luna Garden — Отчёт по кассам</h1>
           <p style={{ margin: "2px 0 12px", color: "#666", fontSize: 12 }}>Период: {presetLabel} ({from} — {to})</p>
           <table>
             <thead><tr><th>Показатель</th><th>Значение</th></tr></thead>

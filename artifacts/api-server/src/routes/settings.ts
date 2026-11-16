@@ -5,8 +5,17 @@ import { appSettingsTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { sensitiveActionLimiter } from "../middlewares/security";
+import { hashPassword, validatePassword, normalizeLogin } from "../lib/passwords";
+import { newAccountId, destroyAllSessionsForUser } from "../lib/session";
+import { logAudit } from "../lib/auditLogger";
 
 const router: IRouter = Router();
+
+/** Never send password hashes to the client. */
+function publicUser<T extends { passwordHash?: string | null }>(u: T): Omit<T, "passwordHash"> {
+  const { passwordHash: _omit, ...rest } = u;
+  return rest;
+}
 
 const ALL_ROLES = ["super_admin", "warehouse_chief", "manager", "accountant", "warehouse", "location_admin", "cashier"];
 
@@ -76,10 +85,10 @@ router.get("/admin/users", requireAuth(), async (req: Request, res: Response) =>
         where: and(eq(usersTable.role, "cashier"), eq(usersTable.locationId, manager.locationId ?? -1)),
         orderBy: (u, { asc }) => [asc(u.createdAt)],
       });
-  res.json(users);
+  res.json(users.map(publicUser));
 });
 
-/** Create a Clerk user + insert into usersTable */
+/** Create a local account (login + temporary password). */
 router.post("/admin/users", requireAuth(), sensitiveActionLimiter, async (req: Request, res: Response) => {
   const manager = await requireUserManager(req, res);
   if (!manager) return;
@@ -93,10 +102,10 @@ router.post("/admin/users", requireAuth(), sensitiveActionLimiter, async (req: R
     locationId?: number | null;
   };
 
-  if (!email || !password) {
-    res.status(400).json({ error: "Email и пароль обязательны" });
-    return;
-  }
+  const login = normalizeLogin(email);
+  if (!login) { res.status(400).json({ error: "Укажите логин (без пробелов, от 2 символов)" }); return; }
+  const pwdError = validatePassword(password);
+  if (pwdError) { res.status(400).json({ error: pwdError }); return; }
 
   let assignedRole: string;
   let assignedLocationId: number | null;
@@ -111,62 +120,42 @@ router.post("/admin/users", requireAuth(), sensitiveActionLimiter, async (req: R
     if (!assignedLocationId) { res.status(400).json({ error: "Вам не назначена площадка" }); return; }
   }
 
-  const clerkSecretKey = process.env.CLERK_SECRET_KEY;
-  if (!clerkSecretKey) {
-    res.status(503).json({ error: "CLERK_SECRET_KEY не настроен" });
-    return;
-  }
-
   try {
-    // Create user in Clerk
-    const clerkRes = await fetch("https://api.clerk.com/v1/users", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${clerkSecretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        first_name: firstName ?? "",
-        last_name: lastName ?? "",
-        email_address: [email],
-        password,
-        skip_password_checks: false,
-        skip_password_requirement: false,
-      }),
-    });
-
-    if (!clerkRes.ok) {
-      const errBody = await clerkRes.json() as { errors?: Array<{ message?: string; long_message?: string }> };
-      const msg = errBody?.errors?.[0]?.long_message ?? errBody?.errors?.[0]?.message ?? "Ошибка создания пользователя в Clerk";
-      res.status(clerkRes.status).json({ error: msg });
-      return;
-    }
-
-    const clerkUser = await clerkRes.json() as { id: string; email_addresses?: Array<{ email_address: string }> };
-    const clerkUserId = clerkUser.id;
-    const resolvedEmail = clerkUser.email_addresses?.[0]?.email_address ?? email;
-
-    // Upsert into our usersTable
-    const existing = await db.query.usersTable.findFirst({ where: eq(usersTable.clerkUserId, clerkUserId) });
-    let dbUser;
-    if (existing) {
-      [dbUser] = await db.update(usersTable).set({ role: assignedRole, locationId: assignedLocationId, email: resolvedEmail, firstName: firstName ?? null, lastName: lastName ?? null }).where(eq(usersTable.clerkUserId, clerkUserId)).returning();
-    } else {
-      [dbUser] = await db.insert(usersTable).values({
-        clerkUserId,
-        email: resolvedEmail,
-        role: assignedRole,
-        locationId: assignedLocationId,
-        firstName: firstName ?? null,
-        lastName: lastName ?? null,
-      }).returning();
-    }
-
-    res.status(201).json(dbUser);
+    const [dbUser] = await db.insert(usersTable).values({
+      clerkUserId: newAccountId(),
+      email: login,
+      passwordHash: await hashPassword(password!),
+      role: assignedRole,
+      locationId: assignedLocationId,
+      firstName: firstName?.trim() || null,
+      lastName: lastName?.trim() || null,
+    }).onConflictDoNothing().returning();
+    if (!dbUser) { res.status(409).json({ error: `Логин «${login}» уже занят` }); return; }
+    await logAudit({ action: "create", entityType: "user", entityId: dbUser.id, clerkUserId: req.auth?.userId, details: `Логин ${login}, роль ${assignedRole}` });
+    res.status(201).json(publicUser(dbUser));
   } catch (err) {
     logger.error({ err }, "Failed to create user");
     res.status(500).json({ error: "Внутренняя ошибка сервера" });
   }
+});
+
+/** Reset another user's password (admin sets a new temporary one). Signs that user out everywhere. */
+router.post("/admin/users/:id/password", requireAuth(), sensitiveActionLimiter, async (req: Request, res: Response) => {
+  const manager = await requireUserManager(req, res);
+  if (!manager) return;
+  const id = Number(req.params.id);
+  const target = await db.query.usersTable.findFirst({ where: eq(usersTable.id, id) });
+  if (!target) { res.status(404).json({ error: "User not found" }); return; }
+  if (manager.role !== "super_admin" && (target.role !== "cashier" || target.locationId !== manager.locationId)) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+  const { password } = req.body as { password?: string };
+  const pwdError = validatePassword(password);
+  if (pwdError) { res.status(400).json({ error: pwdError }); return; }
+  await db.update(usersTable).set({ passwordHash: await hashPassword(password!) }).where(eq(usersTable.id, id));
+  await destroyAllSessionsForUser(id);
+  await logAudit({ action: "update", entityType: "user", entityId: id, clerkUserId: req.auth?.userId, details: "Сброс пароля" });
+  res.json({ success: true });
 });
 
 /** Change user role */
@@ -189,10 +178,10 @@ router.patch("/admin/users/:id/role", requireAuth(), sensitiveActionLimiter, asy
     .where(eq(usersTable.id, id))
     .returning();
   if (!updated) { res.status(404).json({ error: "User not found" }); return; }
-  res.json(updated);
+  res.json(publicUser(updated));
 });
 
-/** Delete user from DB (also removes from Clerk if possible) */
+/** Delete user (their sessions cascade). */
 router.delete("/admin/users/:id", requireAuth(), sensitiveActionLimiter, async (req: Request, res: Response) => {
   const manager = await requireUserManager(req, res);
   if (!manager) return;
@@ -214,19 +203,6 @@ router.delete("/admin/users/:id", requireAuth(), sensitiveActionLimiter, async (
     return;
   }
 
-  // Try to delete from Clerk (non-blocking — DB deletion happens regardless)
-  const clerkSecretKey = process.env.CLERK_SECRET_KEY;
-  if (clerkSecretKey && target.clerkUserId) {
-    try {
-      await fetch(`https://api.clerk.com/v1/users/${target.clerkUserId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${clerkSecretKey}` },
-      });
-    } catch (err) {
-      logger.warn({ err }, "Failed to delete user from Clerk, continuing with DB deletion");
-    }
-  }
-
   await db.delete(usersTable).where(eq(usersTable.id, id));
   res.json({ success: true });
 });
@@ -242,7 +218,7 @@ router.patch("/admin/users/me/telegram", requireAuth(), async (req: Request, res
     .set({ telegramChatId: telegramChatId || null })
     .where(eq(usersTable.clerkUserId, clerkUserId))
     .returning();
-  res.json(updated);
+  res.json(updated ? publicUser(updated) : null);
 });
 
 router.get("/admin/telegram/status", requireAuth(), async (_req: Request, res: Response) => {

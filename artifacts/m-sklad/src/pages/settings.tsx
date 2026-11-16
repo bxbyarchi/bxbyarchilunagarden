@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFetch, useSeedDemoData } from "@workspace/api-client-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -13,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { User, Building2, Shield, MessageCircle, CheckCircle, XCircle, Save, Link, Plus, Trash2, Eye, EyeOff, Warehouse, Sparkles } from "lucide-react";
+import { User, Building2, Shield, MessageCircle, CheckCircle, XCircle, Save, Link, Plus, Trash2, Eye, EyeOff, KeyRound, Warehouse, Sparkles } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/roles";
 
 const CURRENCIES = [{ value: "KGS", label: "Сом (KGS)" }];
@@ -41,11 +40,14 @@ type SystemUser = {
 };
 
 function ProfileSection() {
-  const { user } = useUser();
+  const { user, isLoading } = useCurrentUser();
   const { toast } = useToast();
-  const [firstName, setFirstName] = useState(user?.firstName ?? "");
-  const [lastName, setLastName] = useState(user?.lastName ?? "");
+  const qc = useQueryClient();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pwd, setPwd] = useState({ current: "", next: "", confirm: "" });
+  const [changing, setChanging] = useState(false);
 
   useEffect(() => {
     setFirstName(user?.firstName ?? "");
@@ -53,10 +55,10 @@ function ProfileSection() {
   }, [user?.firstName, user?.lastName]);
 
   async function handleSaveName() {
-    if (!user) return;
     setSaving(true);
     try {
-      await user.update({ firstName, lastName });
+      await customFetch("/api/auth/profile", { method: "PATCH", body: JSON.stringify({ firstName, lastName }) });
+      await qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast({ title: "Имя обновлено" });
     } catch {
       toast({ title: "Ошибка сохранения", variant: "destructive" });
@@ -64,6 +66,22 @@ function ProfileSection() {
       setSaving(false);
     }
   }
+
+  async function handleChangePassword() {
+    if (pwd.next !== pwd.confirm) { toast({ title: "Пароли не совпадают", variant: "destructive" }); return; }
+    setChanging(true);
+    try {
+      await customFetch("/api/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword: pwd.current, newPassword: pwd.next }) });
+      setPwd({ current: "", next: "", confirm: "" });
+      toast({ title: "Пароль изменён", description: "Остальные устройства вышли из аккаунта." });
+    } catch (err) {
+      toast({ title: "Не удалось сменить пароль", description: (err as { data?: { error?: string } })?.data?.error, variant: "destructive" });
+    } finally {
+      setChanging(false);
+    }
+  }
+
+  if (isLoading) return null;
 
   return (
     <div className="space-y-6">
@@ -77,13 +95,18 @@ function ProfileSection() {
             <div className="space-y-2"><Label>Имя</Label><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Имя" /></div>
             <div className="space-y-2"><Label>Фамилия</Label><Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Фамилия" /></div>
           </div>
-          <div className="space-y-2"><Label>Email</Label><Input value={user?.primaryEmailAddress?.emailAddress ?? ""} disabled className="bg-muted" /></div>
+          <div className="space-y-2"><Label>Логин</Label><Input value={user?.email ?? ""} disabled className="bg-muted" /></div>
           <Button onClick={handleSaveName} disabled={saving}><Save className="mr-2 h-4 w-4" />Сохранить имя</Button>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle className="text-base">Смена пароля</CardTitle><CardDescription>Для смены пароля воспользуйтесь страницей входа.</CardDescription></CardHeader>
-        <CardContent><Button variant="outline" onClick={() => toast({ title: "Смена пароля", description: "Перейдите на страницу входа и нажмите «Забыли пароль»." })}>Отправить инструкцию</Button></CardContent>
+        <CardHeader><CardTitle className="text-base">Смена пароля</CardTitle><CardDescription>После смены пароля остальные устройства выйдут из аккаунта.</CardDescription></CardHeader>
+        <CardContent className="space-y-3 max-w-sm">
+          <div className="space-y-2"><Label>Текущий пароль</Label><Input type="password" autoComplete="current-password" value={pwd.current} onChange={(e) => setPwd((p) => ({ ...p, current: e.target.value }))} /></div>
+          <div className="space-y-2"><Label>Новый пароль</Label><Input type="password" autoComplete="new-password" value={pwd.next} onChange={(e) => setPwd((p) => ({ ...p, next: e.target.value }))} placeholder="Минимум 8 символов" /></div>
+          <div className="space-y-2"><Label>Повторите новый пароль</Label><Input type="password" autoComplete="new-password" value={pwd.confirm} onChange={(e) => setPwd((p) => ({ ...p, confirm: e.target.value }))} /></div>
+          <Button variant="outline" onClick={handleChangePassword} disabled={changing || !pwd.current || !pwd.next}>{changing ? "Сохранение…" : "Сменить пароль"}</Button>
+        </CardContent>
       </Card>
     </div>
   );
@@ -113,7 +136,7 @@ function OrgSection() {
     <Card>
       <CardHeader><CardTitle className="text-base">Параметры организации</CardTitle><CardDescription>Настройки отображаются во всём интерфейсе системы.</CardDescription></CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2"><Label>Название системы / организации</Label><Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="Северное сияние" disabled={!isSuperAdmin} /></div>
+        <div className="space-y-2"><Label>Название системы / организации</Label><Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="Luna Garden" disabled={!isSuperAdmin} /></div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2"><Label>Валюта</Label><Select value={currency} onValueChange={setCurrency} disabled={!isSuperAdmin}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-2"><Label>Часовой пояс</Label><Select value={timezone} onValueChange={setTimezone} disabled={!isSuperAdmin}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{TIMEZONES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent></Select></div>
@@ -170,7 +193,7 @@ function AddEmployeeDialog({ open, onOpenChange, onCreated, isSuperAdmin }: { op
 
   function reset() { setFirstName(""); setLastName(""); setEmail(""); setPassword(""); setRole(isSuperAdmin ? "warehouse" : "cashier"); setShowPwd(false); setError(null); }
   async function handleCreate() {
-    if (!email.trim() || !password.trim()) { setError("Email и пароль обязательны"); return; }
+    if (!email.trim() || !password.trim()) { setError("Логин и пароль обязательны"); return; }
     if (password.length < 8) { setError("Пароль должен быть не менее 8 символов"); return; }
     setLoading(true); setError(null);
     try {
@@ -186,7 +209,7 @@ function AddEmployeeDialog({ open, onOpenChange, onCreated, isSuperAdmin }: { op
       <DialogContent className="max-w-sm"><DialogHeader><DialogTitle>Добавить сотрудника</DialogTitle></DialogHeader>
         <div className="space-y-3 pt-2">
           <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label className="text-xs">Имя</Label><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Иван" /></div><div className="space-y-1.5"><Label className="text-xs">Фамилия</Label><Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Петров" /></div></div>
-          <div className="space-y-1.5"><Label className="text-xs">Email *</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ivan@example.com" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Логин *</Label><Input autoCapitalize="none" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="например, povar1" /></div>
           <div className="space-y-1.5"><Label className="text-xs">Временный пароль *</Label><div className="relative"><Input type={showPwd ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 8 символов" className="pr-10" /><button type="button" onClick={() => setShowPwd((p) => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">{showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
           <div className="space-y-1.5"><Label className="text-xs">Роль</Label>{isSuperAdmin ? (
             <Select value={role} onValueChange={setRole}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(ROLE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select>
@@ -231,6 +254,16 @@ function AccessSection() {
 
   if (!canManageUsers) return <Card><CardContent className="py-8 text-center text-muted-foreground">Раздел доступен только Супер-админу и Админу площадки.</CardContent></Card>;
   const userList = users ?? [];
+  async function resetPassword(id: number, login: string) {
+    const password = window.prompt(`Новый временный пароль для «${login}» (минимум 8 символов):`);
+    if (!password) return;
+    try {
+      await customFetch(`/api/admin/users/${id}/password`, { method: "POST", body: JSON.stringify({ password }) });
+      toast({ title: "Пароль сброшен", description: `Передайте сотруднику новый пароль. Все его устройства вышли из аккаунта.` });
+    } catch (err) {
+      toast({ title: "Не удалось сбросить пароль", description: (err as { data?: { error?: string } })?.data?.error, variant: "destructive" });
+    }
+  }
   const locationName = (id: number | null) => locations?.find((l) => l.id === id)?.name ?? "Не назначен";
 
   return (
@@ -248,7 +281,7 @@ function AccessSection() {
         <CardContent className="p-0">
           {isLoading ? <div className="py-8 text-center text-muted-foreground text-sm">Загрузка...</div> : !userList.length ? <div className="py-8 text-center text-muted-foreground text-sm">Нет зарегистрированных пользователей.</div> : (
             <Table>
-              <TableHeader><TableRow><TableHead>Сотрудник</TableHead><TableHead>Роль</TableHead>{isSuperAdmin && <TableHead>Склад</TableHead>}<TableHead>Зарегистрирован</TableHead><TableHead className="w-10" /></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Сотрудник</TableHead><TableHead>Роль</TableHead>{isSuperAdmin && <TableHead>Склад</TableHead>}<TableHead>Зарегистрирован</TableHead><TableHead className="w-20" /></TableRow></TableHeader>
               <TableBody>{userList.map((u) => {
                 const displayName = [u.firstName, u.lastName].filter(Boolean).join(" ") || "—";
                 const isMe = u.clerkUserId === me?.clerkUserId;
@@ -261,7 +294,7 @@ function AccessSection() {
                   )}</TableCell>
                   {isSuperAdmin && <TableCell><Select value={u.locationId === null ? "none" : String(u.locationId)} onValueChange={(value) => changeLocation.mutate({ id: u.id, locationId: value === "none" ? null : Number(value) })} disabled={isMe || changeLocation.isPending}><SelectTrigger className="w-44 h-8"><Warehouse className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Не назначен" /></SelectTrigger><SelectContent><SelectItem value="none">Не назначен</SelectItem>{(locations ?? []).map((location) => <SelectItem key={location.id} value={String(location.id)}>{location.name}</SelectItem>)}</SelectContent></Select></TableCell>}
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{new Date(u.createdAt).toLocaleDateString("ru-RU")}</TableCell>
-                  <TableCell>{!isMe && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setDeletingId(u.id)}><Trash2 className="h-4 w-4" /></Button>}</TableCell>
+                  <TableCell>{!isMe && <div className="flex"><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" title="Сбросить пароль" onClick={() => resetPassword(u.id, u.email)}><KeyRound className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setDeletingId(u.id)}><Trash2 className="h-4 w-4" /></Button></div>}</TableCell>
                 </TableRow>;
               })}</TableBody>
             </Table>

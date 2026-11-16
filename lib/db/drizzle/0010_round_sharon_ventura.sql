@@ -1,0 +1,1 @@
+ALTER TABLE "app_settings" ALTER COLUMN "org_name" SET DEFAULT 'Luna Garden';

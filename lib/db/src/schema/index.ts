@@ -18,3 +18,4 @@ export * from "./sales";
 export * from "./products";
 export * from "./productRecipeItems";
 export * from "./cashMovements";
+export * from "./sessions";

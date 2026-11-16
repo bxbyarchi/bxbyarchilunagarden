@@ -126,8 +126,7 @@
 | Переменная               | Описание                              |
 |--------------------------|---------------------------------------|
 | `TELEGRAM_BOT_TOKEN`     | Токен Telegram-бота (BotFather)       |
-| `CLERK_SECRET_KEY`       | Секретный ключ Clerk (аутентификация) |
-| `CLERK_PUBLISHABLE_KEY`  | Публичный ключ Clerk                  |
+| `TRUST_PROXY`            | `1`, если сервер стоит за HTTPS-прокси (nginx) |
 | `DATABASE_URL`           | Строка подключения к PostgreSQL       |
 | `DEFAULT_OBJECT_STORAGE_BUCKET_ID` | ID бакета для фото         |
 
@@ -137,10 +136,10 @@
 
 ## 🚀 Запуск
 
-Привязок к хостингу нет. Локально: скопируйте `.env.example` в `.env`, заполните значения и запустите
+Привязок к хостингу нет. При первом запуске откройте систему в браузере и создайте администратора. Локально: скопируйте `.env.example` в `.env`, заполните значения и запустите
 `docker compose up -d --build` (приложение + PostgreSQL) — или `pnpm install && pnpm run build` и
 `pnpm --filter @workspace/api-server start` с внешней базой.
 
 ---
 
-*M-Sklad — система складского учёта для ресторана. Разработано на стеке: Express 5, Drizzle ORM, React + Vite, Tailwind v4, shadcn/ui, Clerk Auth.*
+*Luna Garden — система управления рестораном. Стек: Express 5, Drizzle ORM, PostgreSQL, React + Vite, Tailwind v4, shadcn/ui. Вход — собственные логины и пароли, работает без интернета.*

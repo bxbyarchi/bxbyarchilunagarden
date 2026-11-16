@@ -19,27 +19,37 @@ function parseAllowedOrigins(): string[] {
 
 const allowedOrigins = parseAllowedOrigins();
 
+/** True when the Origin header names this same server (same host:port). */
+export function isSameOrigin(origin: string, host: string | undefined): boolean {
+  if (!host) return false;
+  try {
+    return new URL(origin).host.toLowerCase() === host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 /**
- * api-server serves the built frontend itself (see app.ts), so the browser
- * app always calls the API same-origin in production — same-origin requests
- * never carry an Origin header the browser expects CORS to police, so this
- * allowlist only ever matters for: local dev (separate Vite port) and any
- * other legitimate cross-origin caller we explicitly add via
- * CORS_ALLOWED_ORIGINS. Everything else is rejected.
+ * api-server serves the built frontend itself (see app.ts). Browsers DO send
+ * an Origin header on same-origin module scripts, stylesheets loaded with
+ * crossorigin, and every POST/PATCH/DELETE — so same-origin must be allowed
+ * automatically: the restaurant's local server is reached at whatever LAN
+ * address it has (http://192.168.1.10:3000), which no allowlist can predict.
+ * Extra cross-origin callers: local Vite dev + CORS_ALLOWED_ORIGINS.
+ * Any other origin simply gets no CORS headers (the browser blocks the read);
+ * it is not turned into a 500, and session cookies (SameSite=Lax) are never
+ * sent cross-site anyway.
  */
-export const corsMiddleware = cors({
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin "${origin}" is not allowed`));
-  },
-  credentials: true,
+export const corsMiddleware = cors((req, callback) => {
+  const origin = req.headers.origin;
+  const allowed = !origin || isSameOrigin(origin, req.headers.host) || allowedOrigins.includes(origin);
+  callback(null, { origin: allowed, credentials: true });
 });
 
 export const helmetMiddleware = helmet({
   // api-server also serves the built SPA from this same origin. A strict
   // default CSP needs per-asset hashes/nonces for Vite's hashed bundle and
-  // allowances for Clerk's embedded widgets — worth doing properly rather
+  // inline styles from UI libraries — worth doing properly rather
   // than shipping a CSP that either breaks the app or is too loose to help.
   // Tracked for a follow-up pass; every other helmet protection (HSTS,
   // nosniff, frameguard, referrer-policy, etc.) is on by default here.
@@ -73,10 +83,8 @@ export const apiLimiter = rateLimit({
 
 /** Strict limiter for privilege-granting writes: minting/deleting user
  * accounts, changing roles, seeding demo data. These are rare, admin-only
- * actions — nobody legitimate needs to hit them dozens of times a minute,
- * and they're the closest thing this API has to an account-takeover
- * surface (there's no local password-login endpoint; Clerk's hosted UI
- * handles that entirely client-side). Keyed by IP: an attacker attempting
+ * actions — nobody legitimate needs to hit them dozens of times a minute.
+ * (Password login has its own limiter, loginLimiter below.) Keyed by IP: an attacker attempting
  * this doesn't have a legitimate userId yet to key on, and the legitimate
  * callers here are a handful of admins, never a shared venue tablet IP. */
 export const sensitiveActionLimiter = rateLimit({
@@ -85,4 +93,23 @@ export const sensitiveActionLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Слишком много попыток. Попробуйте позже." },
+});
+
+/** Brute-force guard for password login / first-run setup / password change.
+ * Keyed by IP + submitted login, so one person mistyping on a shared kassa
+ * tablet doesn't lock out colleagues on the same device, while guessing many
+ * passwords for one account from one device is capped. Successful logins
+ * don't count. */
+export const loginLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req: Request) => {
+    const ip = req.ip ? ipKeyGenerator(req.ip) : "unknown";
+    const login = typeof req.body?.login === "string" ? req.body.login.trim().toLowerCase().slice(0, 100) : "";
+    return `${ip}|${login}`;
+  },
+  message: { error: "Слишком много попыток входа. Попробуйте через 15 минут." },
 });
