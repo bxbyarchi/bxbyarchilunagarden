@@ -28,6 +28,7 @@ import productRecipesRouter from "./productRecipes";
 import cashMovementsRouter from "./cashMovements";
 import techCardsRouter from "./techCards";
 import productionsRouter from "./productions";
+import salesMarginRouter from "./salesMargin";
 
 const router: IRouter = Router();
 
@@ -48,6 +49,7 @@ router.use(productRecipesRouter);
 router.use(cashMovementsRouter);
 router.use(techCardsRouter);
 router.use(productionsRouter);
+router.use(salesMarginRouter);
 router.use(categoriesRouter);
 router.use(itemsRouter);
 router.use(receiptsRouter);

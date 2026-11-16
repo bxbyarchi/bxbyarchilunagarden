@@ -22,6 +22,7 @@ import { z } from "zod";
 import { Plus, Lock, Unlock, Trash2, Landmark, Minus, Wallet, ArrowDownToLine, ArrowUpFromLine, Percent, ChevronLeft, Receipt, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { printReceipt, getReceiptWidth, setReceiptWidth, type ReceiptWidth } from "@/lib/receiptPrint";
 
 const openSchema = z.object({
   registerId: z.string().min(1, "Касса обязательна"),
@@ -623,50 +624,49 @@ function ShiftWorkSheet({ shift, onClose, onClosedShift }: { shift: ShiftRow; on
 }
 
 function ReceiptDialog({ receipt, onClose }: { receipt: ReceiptData; onClose: () => void }) {
+  const [width, setWidth] = useState<ReceiptWidth>(getReceiptWidth());
+  const printData = { ...receipt, pointName: receipt.houseName };
   return (
-    <>
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #print-receipt, #print-receipt * { visibility: visible !important; }
-          #print-receipt { position: fixed; inset: 0; padding: 16px; font-size: 12px; max-width: 320px; margin: 0 auto; }
-        }
-      `}</style>
-      <Dialog open onOpenChange={(v) => !v && onClose()}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Receipt className="h-4 w-4" /> Чек №{receipt.saleId}</DialogTitle></DialogHeader>
-          <div id="print-receipt" className="text-sm space-y-2">
-            <div className="text-center text-xs text-muted-foreground">
-              <div className="font-semibold text-foreground">{receipt.houseName} — {receipt.registerName}</div>
-              <div>{new Date(receipt.createdAt).toLocaleString("ru-RU")}</div>
-              <div>Кассир: {receipt.cashierName}</div>
-            </div>
-            <div className="border-t border-dashed border-border pt-2 space-y-1">
-              {receipt.items.map((it, i) => (
-                <div key={i} className="flex justify-between gap-2">
-                  <span className="flex-1">{it.name} × {it.quantity}</span>
-                  <span>{money(it.quantity * it.pricePerUnit)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="border-t border-dashed border-border pt-2 space-y-1">
-              {receipt.discountPercent > 0 && (
-                <>
-                  <div className="flex justify-between text-muted-foreground"><span>Подытог</span><span>{money(receipt.subtotal)}</span></div>
-                  <div className="flex justify-between text-muted-foreground"><span>Скидка {receipt.discountPercent}%</span><span>−{money(receipt.discountAmount)}</span></div>
-                </>
-              )}
-              <div className="flex justify-between font-semibold text-base"><span>Итого</span><span>{money(receipt.total)}</span></div>
-              <div className="flex justify-between text-muted-foreground"><span>Оплата</span><span>{receipt.paymentMethod === "cash" ? "Наличные" : "Безнал"}</span></div>
-            </div>
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Receipt className="h-4 w-4" /> Чек №{receipt.saleId}</DialogTitle></DialogHeader>
+        <div className="text-sm space-y-2 rounded-md border bg-white p-3 font-mono text-black">
+          <div className="text-center text-xs">
+            <div className="font-semibold">{receipt.houseName} · {receipt.registerName}</div>
+            <div>{new Date(receipt.createdAt).toLocaleString("ru-RU")}</div>
+            <div>Кассир: {receipt.cashierName}</div>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="border-t border-dashed border-black/40 pt-2 space-y-1">
+            {receipt.items.map((it, i) => (
+              <div key={i} className="flex justify-between gap-2">
+                <span className="flex-1">{it.name} × {it.quantity}</span>
+                <span>{money(it.quantity * it.pricePerUnit)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-dashed border-black/40 pt-2 space-y-1">
+            {receipt.discountPercent > 0 && (
+              <>
+                <div className="flex justify-between"><span>Подытог</span><span>{money(receipt.subtotal)}</span></div>
+                <div className="flex justify-between"><span>Скидка {receipt.discountPercent}%</span><span>−{money(receipt.discountAmount)}</span></div>
+              </>
+            )}
+            <div className="flex justify-between font-semibold text-base"><span>Итого</span><span>{money(receipt.total)}</span></div>
+            <div className="flex justify-between"><span>Оплата</span><span>{receipt.paymentMethod === "cash" ? "Наличные" : "Безнал"}</span></div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <Select value={width} onValueChange={(v) => { setWidth(v as ReceiptWidth); setReceiptWidth(v as ReceiptWidth); }}>
+            <SelectTrigger className="w-28 h-9" aria-label="Ширина ленты"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="80">Лента 80 мм</SelectItem><SelectItem value="58">Лента 58 мм</SelectItem></SelectContent>
+          </Select>
+          <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} data-testid="btn-close-receipt">Готово</Button>
-            <Button onClick={() => window.print()} data-testid="btn-print-receipt"><Printer className="mr-2 h-4 w-4" /> Печать</Button>
+            <Button onClick={() => printReceipt(printData, width)} data-testid="btn-print-receipt"><Printer className="mr-2 h-4 w-4" /> Печать</Button>
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

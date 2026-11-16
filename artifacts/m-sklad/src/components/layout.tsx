@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { useSignOut, BRAND_NAME } from "@/hooks/useAuthState";
-import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory } from "lucide-react";
+import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/roles";
 
@@ -31,6 +31,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Точки продаж", href: "/houses", icon: Home, roles: ["super_admin", "location_admin"], testId: "houses" },
     { name: "Смены", href: "/shifts", icon: Unlock, roles: ["super_admin", "location_admin", "cashier"], testId: "shifts" },
     { name: "Аналитика касс", href: "/kassa-dashboard", icon: PieChart, roles: ["super_admin", "location_admin"], testId: "kassa-dashboard" },
+    { name: "Маржа продаж", href: "/sales-margin", icon: TrendingUp, roles: ["super_admin", "location_admin"], testId: "sales-margin" },
     { name: "Отчёты касс", href: "/kassa-reports", icon: FileBarChart, roles: ["super_admin", "location_admin"], testId: "kassa-reports" },
     { name: "Калькуляции", href: "/kassa-costing", icon: Calculator, roles: ["super_admin", "location_admin"], testId: "kassa-costing" },
   ];

@@ -26,6 +26,7 @@ import KassaCosting from "@/pages/kassa-costing";
 import { LoginPage, SetupPage } from "@/pages/login";
 import { TechCardsList, TechCardDetail, TechCardEditor } from "@/pages/tech-cards";
 import Productions from "@/pages/productions";
+import SalesMargin from "@/pages/sales-margin";
 import { AppLayout } from "@/components/layout";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { AppRole } from "@/hooks/useCurrentUser";
@@ -106,6 +107,7 @@ function Routes() {
       <Route path="/shifts"><RoleProtectedRoute component={Shifts} minRole="cashier" domain="venue" /></Route>
       <Route path="/kassa-dashboard"><RoleProtectedRoute component={KassaDashboard} minRole="location_admin" domain="venue" /></Route>
       <Route path="/kassa-reports"><RoleProtectedRoute component={KassaReports} minRole="location_admin" domain="venue" /></Route>
+      <Route path="/sales-margin"><RoleProtectedRoute component={SalesMargin} minRole="location_admin" domain="venue" /></Route>
       <Route path="/kassa-costing"><RoleProtectedRoute component={KassaCosting} minRole="location_admin" domain="venue" /></Route>
       <Route path="/categories"><RoleProtectedRoute component={Categories} minRole="manager" /></Route>
       <Route path="/receipts"><ProtectedRoute component={Receipts} /></Route>
