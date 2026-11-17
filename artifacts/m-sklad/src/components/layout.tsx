@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { useSignOut, BRAND_NAME } from "@/hooks/useAuthState";
-import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3, CalendarDays, UserRound, Bot, CalendarRange, Clock, ScanFace } from "lucide-react";
+import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3, CalendarDays, UserRound, Bot, CalendarRange, Clock, ScanFace, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/roles";
 
@@ -41,6 +41,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   ];
   const PERSONNEL_ADMIN = ["super_admin", "warehouse_chief", "location_admin", "manager"];
   const personnelNavigation = [
+    { name: "Задачи", href: "/tasks", icon: ListTodo, roles: undefined as string[] | undefined, testId: "tasks" },
     { name: "Сотрудники", href: "/staff", icon: Users, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "staff" },
     { name: "График смен", href: "/schedule", icon: CalendarRange, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "schedule" },
     { name: "Табель", href: "/timesheet", icon: Clock, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "timesheet" },
@@ -62,7 +63,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="mx-3 mb-4 rounded-xl border border-sidebar-border bg-sidebar-accent/60 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-sidebar-foreground/70"><MapPin className="h-3.5 w-3.5" />{isVenueOnly ? "Площадка" : "Склад"}</div><div className="mt-2 text-sm font-semibold">{displayLocation}</div></div>
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto pb-4">
         {navigation.map((item) => { if (item.roles && user?.role && !item.roles.includes(user.role)) return null; const isActive = location === item.href; return <Link key={item.testId} href={item.href}><div className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-pointer transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"}`} data-testid={`nav-${item.testId}`} onClick={closeSidebar}><item.icon className="mr-3 h-5 w-5 flex-shrink-0" />{item.name}</div></Link>; })}
-        {([["Касса и зал", venueNavigation], ["Персонал", personnelNavigation]] as const).map(([title, items]) => items.some((item) => !item.roles || (user?.role && item.roles.includes(user.role))) && (
+        {([["Касса и зал", venueNavigation], ["Команда", personnelNavigation]] as const).map(([title, items]) => items.some((item) => !item.roles || (user?.role && item.roles.includes(user.role))) && (
           <div key={title} className="pt-3 mt-3 border-t border-sidebar-border/60">
             <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/40">{title}</div>
             {items.map((item) => { if (item.roles && user?.role && !item.roles.includes(user.role)) return null; const isActive = location === item.href; return <Link key={item.testId} href={item.href}><div className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-pointer transition-colors ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"}`} data-testid={`nav-${item.testId}`} onClick={closeSidebar}><item.icon className="mr-3 h-5 w-5 flex-shrink-0" />{item.name}</div></Link>; })}

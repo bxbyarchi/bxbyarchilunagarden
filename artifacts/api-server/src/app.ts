@@ -2,6 +2,7 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import pinoHttp from "pino-http";
 import path from "node:path";
 import router from "./routes";
+import { startTaskReminders } from "./routes/tasks";
 import { logger } from "./lib/logger";
 import { initTelegramBot } from "./lib/telegramBot";
 import { sessionMiddleware } from "./lib/session";
@@ -46,6 +47,8 @@ app.use("/api", apiLimiter);
 app.use("/api", router);
 
 const telegramWebhook = initTelegramBot();
+// Telegram reminders about overdue tasks (no-op sends when the bot is off).
+if (process.env.NODE_ENV !== "test") startTaskReminders();
 if (telegramWebhook) {
   app.use("/api", telegramWebhook);
 }

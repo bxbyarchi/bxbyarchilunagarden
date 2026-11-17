@@ -137,3 +137,18 @@ export async function notifyStaff(text: string, roles: string[] = ["super_admin"
   } catch (err) { logger.error({ err }, "notifyStaff error"); }
   return sent;
 }
+
+/** Plain-text notification to specific CRM accounts (by clerkUserId) that linked Telegram. */
+export async function notifyUsers(clerkIds: (string | null | undefined)[], text: string): Promise<number> {
+  const ids = [...new Set(clerkIds.filter((x): x is string => !!x))];
+  if (!bot || !ids.length) return 0;
+  let sent = 0;
+  try {
+    const rows = await db.select({ chatId: usersTable.telegramChatId }).from(usersTable).where(inArray(usersTable.clerkUserId, ids));
+    for (const r of rows) {
+      if (!r.chatId) continue;
+      try { await bot.telegram.sendMessage(Number(r.chatId), text); sent++; } catch (err) { logger.warn({ err }, "notifyUsers: send failed"); }
+    }
+  } catch (err) { logger.error({ err }, "notifyUsers error"); }
+  return sent;
+}

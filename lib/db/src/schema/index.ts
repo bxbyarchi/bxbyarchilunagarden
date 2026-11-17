@@ -25,3 +25,4 @@ export * from "./counterparties";
 export * from "./stockLedger";
 export * from "./guests";
 export * from "./aiAgent";
+export * from "./tasks";
