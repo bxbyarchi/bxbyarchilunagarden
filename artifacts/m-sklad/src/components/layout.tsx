@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { useSignOut, BRAND_NAME } from "@/hooks/useAuthState";
-import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3, CalendarDays, UserRound, Bot, CalendarRange, Clock, ScanFace, ListTodo, Wallet, Sparkles } from "lucide-react";
+import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3, CalendarDays, UserRound, Bot, CalendarRange, Clock, ScanFace, ListTodo, Wallet, Sparkles, BookOpen, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/roles";
 
@@ -50,6 +50,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   ];
   const helpNavigation = [
     { name: "ИИ-советник", href: "/advisor", icon: Sparkles, roles: undefined as string[] | undefined, testId: "advisor" },
+    { name: "База знаний", href: "/knowledge", icon: BookOpen, roles: undefined as string[] | undefined, testId: "knowledge" },
+    { name: "Обучение", href: "/training", icon: GraduationCap, roles: undefined as string[] | undefined, testId: "training" },
   ];
   const settingsItem = { name: "Настройки", href: "/settings", icon: Settings, testId: "settings" };
   const closeSidebar = () => setSidebarOpen(false);

@@ -30,7 +30,7 @@ const TOOLS: Anthropic.Beta.BetaToolUnion[] = [{
   description: `Открыть отчёт CRM с правами текущего пользователя и получить данные в JSON. Если роли отчёт недоступен — вернётся ошибка доступа.
 Отчёты:
 ${REPORT_NAMES.map((n) => `- ${n}: ${REPORTS[n].about}${REPORTS[n].period ? " (нужен период from/to)" : ""}`).join("\n")}
-Даты — YYYY-MM-DD по времени Бишкека, to включительно. Для отчётов без периода передавай from и to = null. q — только для stock_items, иначе null.
+Даты — YYYY-MM-DD по времени Бишкека, to включительно. Для отчётов без периода передавай from и to = null. q — только для stock_items и knowledge, иначе null.
 Длинные списки обрезаются; если нужно — сузь период.`,
   strict: true,
   input_schema: {
@@ -39,7 +39,7 @@ ${REPORT_NAMES.map((n) => `- ${n}: ${REPORTS[n].about}${REPORTS[n].period ? " (�
       report: { type: "string", enum: REPORT_NAMES },
       from: { type: ["string", "null"], description: "Начало периода YYYY-MM-DD" },
       to: { type: ["string", "null"], description: "Конец периода YYYY-MM-DD включительно" },
-      q: { type: ["string", "null"], description: "Поиск по названию товара (только stock_items)" },
+      q: { type: ["string", "null"], description: "Поиск: товар (stock_items) или слова в базе знаний (knowledge)" },
     },
     required: ["report", "from", "to", "q"],
     additionalProperties: false,
@@ -49,7 +49,7 @@ ${REPORT_NAMES.map((n) => `- ${n}: ${REPORTS[n].about}${REPORTS[n].period ? " (�
 const SYSTEM = `Ты — ИИ-советник внутри CRM ресторана Luna Garden (Бишкек, валюта — сом). Тебе пишут сотрудники: владелец, управляющие, бухгалтер, завхоз, кассиры.
 
 Что ты делаешь:
-1. Помогаешь пользоваться CRM: объясняешь, где что находится и как сделать операцию, по шагам.
+1. Помогаешь пользоваться CRM: объясняешь, где что находится и как сделать операцию, по шагам. Про правила и регламенты ресторана сначала ищи в базе знаний (отчёт knowledge) и ссылайся на статью.
 2. Анализируешь данные ресторана: продажи и маржа, склад и списания, закупки, брони, персонал (табель, опоздания), задачи, деньги под отчёт.
 3. Советуешь: что улучшить, где теряются деньги, на что обратить внимание. Советы — конкретные и привязанные к цифрам.
 

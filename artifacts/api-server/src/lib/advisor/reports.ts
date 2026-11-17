@@ -24,6 +24,8 @@ export const REPORTS: Record<string, ReportDef> = {
   money_summary: { path: "/money-requests/summary", period: false, about: "Запросы денег: ждут согласования, к выдаче, отчёты на проверке, сумма под отчётом" },
   money_advances: { path: "/money-requests/advances", period: false, about: "У кого сколько денег под отчётом и просроченные отчёты" },
   money_requests: { path: "/money-requests?view=all&status=all", period: false, about: "Последние запросы денег (все статусы): суммы, отделы, кто запросил" },
+  knowledge: { path: "/kb/articles?full=1", period: false, q: true, about: "База знаний ресторана: регламенты, инструкции, правила (q — поиск по словам; без q — все статьи)" },
+  training_progress: { path: "/training/progress", period: false, about: "Обучение: кому какие курсы назначены, кто прошёл, баллы, прочитанные уроки" },
   ai_agent_stats: { path: "/ai/stats?days=30", period: false, about: "ИИ-агент для гостей за 30 дней: диалоги, брони, ошибки, расход" },
 };
 
