@@ -16,6 +16,7 @@ import Timesheet from "@/pages/timesheet";
 import Kiosk from "@/pages/kiosk";
 import Tasks from "@/pages/tasks";
 import MoneyRequests from "@/pages/money-requests";
+import Advisor from "@/pages/advisor";
 import AuditLog from "@/pages/audit-log";
 import Settings from "@/pages/settings";
 import Rentals from "@/pages/rentals";
@@ -146,6 +147,7 @@ function Routes() {
       <Route path="/kiosk"><KioskRoute /></Route>
       <Route path="/tasks"><ProtectedRoute component={Tasks} /></Route>
       <Route path="/money-requests"><ProtectedRoute component={MoneyRequests} /></Route>
+      <Route path="/advisor"><ProtectedRoute component={Advisor} /></Route>
       <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
       <Route path="/reports"><RoleProtectedRoute component={Reports} minRole="warehouse_chief" /></Route>
       <Route path="/settings"><ProtectedRoute component={Settings} /></Route>

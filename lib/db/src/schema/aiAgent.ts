@@ -70,3 +70,28 @@ export const aiSettingsTable = pgTable("ai_settings", {
 export type AiConversation = typeof aiConversationsTable.$inferSelect;
 export type AiMessage = typeof aiMessagesTable.$inferSelect;
 export type AiSettings = typeof aiSettingsTable.$inferSelect;
+
+/** Internal AI advisor: one chat per topic per user. */
+export const advisorChatsTable = pgTable("advisor_chats", {
+  id: serial("id").primaryKey(),
+  userClerkId: text("user_clerk_id").notNull(),
+  title: text("title").notNull().default("Новый вопрос"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({ userIdx: index("advisor_chats_user_idx").on(t.userClerkId, t.updatedAt) }));
+
+export const advisorMessagesTable = pgTable("advisor_messages", {
+  id: serial("id").primaryKey(),
+  chatId: integer("chat_id").notNull().references(() => advisorChatsTable.id, { onDelete: "cascade" }),
+  // user | assistant
+  role: text("role").notNull(),
+  text: text("text").notNull(),
+  // Which reports the advisor looked at: [{ report, params, ok }]
+  actions: jsonb("actions").$type<{ report: string; params: Record<string, unknown>; ok: boolean }[]>(),
+  error: text("error"),
+  model: text("model"),
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  costUsd: numeric("cost_usd", { precision: 10, scale: 5 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({ chatIdx: index("advisor_messages_chat_idx").on(t.chatId, t.createdAt) }));

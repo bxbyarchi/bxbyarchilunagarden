@@ -36,6 +36,7 @@ import aiAgentRouter from "./aiAgent";
 import personnelRouter from "./personnel";
 import tasksRouter from "./tasks";
 import moneyRouter from "./money";
+import advisorRouter from "./advisor";
 
 const router: IRouter = Router();
 
@@ -64,6 +65,7 @@ router.use(aiAgentRouter);
 router.use(personnelRouter);
 router.use(tasksRouter);
 router.use(moneyRouter);
+router.use(advisorRouter);
 router.use(categoriesRouter);
 router.use(itemsRouter);
 router.use(receiptsRouter);
