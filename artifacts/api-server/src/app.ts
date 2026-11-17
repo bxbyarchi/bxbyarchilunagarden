@@ -3,6 +3,7 @@ import pinoHttp from "pino-http";
 import path from "node:path";
 import router from "./routes";
 import { startTaskReminders } from "./routes/tasks";
+import { registerTeamBot } from "./lib/teamBot";
 import { logger } from "./lib/logger";
 import { initTelegramBot } from "./lib/telegramBot";
 import { sessionMiddleware } from "./lib/session";
@@ -48,7 +49,8 @@ app.use("/api", apiLimiter);
 
 app.use("/api", router);
 
-const telegramWebhook = initTelegramBot();
+// Team features (tasks, money) register before the warehouse handlers.
+const telegramWebhook = initTelegramBot(registerTeamBot);
 // Telegram reminders about overdue tasks (no-op sends when the bot is off).
 if (process.env.NODE_ENV !== "test") startTaskReminders();
 if (telegramWebhook) {

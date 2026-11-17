@@ -16,8 +16,9 @@ const DEPARTMENTS = ["kitchen", "bar", "pastry", "hall", "admin", "tech", "other
 const KIND_RU: Record<string, string> = { advance: "под отчёт", payment: "оплата по счёту", reimbursement: "компенсация расходов" };
 const FILE_RE = /^\d{4}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|pdf)$/;
 
-class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
-type Ctx = WarehouseScope & { myStaffId: number | null; seesAll: boolean };
+export type ReqLike = { body?: any; params?: any; query?: any };
+export class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
+export type Ctx = WarehouseScope & { myStaffId: number | null; seesAll: boolean };
 function route(fn: (req: Request, res: Response, ctx: Ctx) => Promise<void>) {
   return [requireAuth(), async (req: Request, res: Response, _next: NextFunction) => {
     try {
@@ -114,7 +115,7 @@ const cols = {
   requesterName: sql<string>`coalesce(NULLIF(concat_ws(' ', ${usersTable.firstName}, ${usersTable.lastName}), ''), ${usersTable.email})`,
 };
 
-router.get("/money-requests", ...route(async (req, res, c) => {
+export async function listMoney(c: Ctx, req: ReqLike = {}) {
   const conds: (SQL | undefined)[] = [visible(c)];
   const view = String(req.query.view ?? "mine");
   if (view === "mine") conds.push(or(eq(moneyRequestsTable.requesterClerkId, c.userId), c.myStaffId ? eq(moneyRequestsTable.staffId, c.myStaffId) : sql`false`));
@@ -134,10 +135,11 @@ router.get("/money-requests", ...route(async (req, res, c) => {
     .leftJoin(usersTable, eq(usersTable.clerkUserId, moneyRequestsTable.requesterClerkId))
     .where(and(...conds.filter(Boolean) as SQL[])).orderBy(desc(moneyRequestsTable.createdAt)).limit(300);
   const today = toLocal(new Date()).date;
-  res.json(rows.map((r) => ({ ...r, amountRequested: Number(r.amountRequested), amountApproved: money(r.amountApproved), amountIssued: money(r.amountIssued), amountSpent: money(r.amountSpent), settlement: money(r.settlement), reportOverdue: isReportOverdue(r, today) })));
-}));
+  return (rows.map((r) => ({ ...r, amountRequested: Number(r.amountRequested), amountApproved: money(r.amountApproved), amountIssued: money(r.amountIssued), amountSpent: money(r.amountSpent), settlement: money(r.settlement), reportOverdue: isReportOverdue(r, today) })));
+}
+router.get("/money-requests", ...route(async (req, res, c) => { res.status(200).json(await listMoney(c, req)); }));
 
-router.get("/money-requests/summary", ...route(async (_req, res, c) => {
+export async function moneySummary(c: Ctx, req: ReqLike = {}) {
   const count = async (w: SQL | undefined) => (await db.select({ n: sql<number>`count(*)::int`, s: sql<string>`coalesce(sum(coalesce(${moneyRequestsTable.amountIssued}, ${moneyRequestsTable.amountApproved}, ${moneyRequestsTable.amountRequested})), 0)` }).from(moneyRequestsTable).where(and(visible(c), w)))[0];
   const mine = or(eq(moneyRequestsTable.requesterClerkId, c.userId), c.myStaffId ? eq(moneyRequestsTable.staffId, c.myStaffId) : sql`false`);
   const today = toLocal(new Date()).date;
@@ -151,11 +153,12 @@ router.get("/money-requests/summary", ...route(async (_req, res, c) => {
   ]);
   const [overdue] = c.seesAll ? await db.select({ n: sql<number>`count(*)::int` }).from(moneyRequestsTable).where(and(eq(moneyRequestsTable.kind, "advance"), eq(moneyRequestsTable.status, "issued"), sql`${moneyRequestsTable.reportDueAt} < ${today}`)) : [null];
   const n = (x: { n: number; s: string } | null) => (x ? { count: x.n, sum: Number(x.s) } : null);
-  res.json({
+  return ({
     role: c.role, isApprover: APPROVERS.includes(c.role), isCashier: CASHIERS.includes(c.role), seesAll: c.seesAll, hasStaffCard: !!c.myStaffId,
     toApprove: n(toApprove), toPay: n(toPay), toCheck: n(toCheck), advances: n(advances), advancesOverdue: overdue?.n ?? null, myOpen: n(myOpen), myToReport: n(myReport),
   });
-}));
+}
+router.get("/money-requests/summary", ...route(async (req, res, c) => { res.status(200).json(await moneySummary(c, req)); }));
 
 router.get("/money-requests/options", ...route(async (_req, res, c) => {
   const staff = await db.select({ id: staffTable.id, name: staffTable.name, position: staffTable.position, department: staffTable.department }).from(staffTable).where(eq(staffTable.isActive, true)).orderBy(staffTable.name);
@@ -184,7 +187,7 @@ router.get("/money-requests/advances", ...route(async (_req, res, c) => {
 
 // ─── One request ────────────────────────────────────────────────────────────
 
-async function detail(id: number, c: Ctx) {
+export async function detail(id: number, c: Ctx) {
   const r = await load(id, c);
   const ev = await db.select().from(moneyRequestEventsTable).where(eq(moneyRequestEventsTable.requestId, id)).orderBy(asc(moneyRequestEventsTable.createdAt), asc(moneyRequestEventsTable.id));
   const nm = await names([r.requesterClerkId, r.approvedByClerkId, r.issuedByClerkId, r.closedByClerkId, ...ev.map((e) => e.authorClerkId)]);
@@ -236,16 +239,17 @@ async function values(b: Record<string, unknown>, c: Ctx, partial: boolean) {
   return v;
 }
 
-router.post("/money-requests", ...route(async (req, res, c) => {
+export async function createMoney(c: Ctx, req: ReqLike = {}) {
   const v = await values(req.body ?? {}, c, false);
   if (v.kind === "payment" && !v.counterpartyId && !v.purpose) throw new HttpError(400, "Укажите получателя платежа — контрагента или реквизиты в описании");
   if (v.kind !== "payment" && !v.staffId) throw new HttpError(400, "Выберите сотрудника, которому выдать деньги");
   const [r] = await db.insert(moneyRequestsTable).values({ ...v, kind: v.kind!, title: v.title!, amountRequested: v.amountRequested!, requesterClerkId: c.userId }).returning();
   await event(r.id, c.userId, "status", `Запрос создан: ${KIND_RU[r.kind]}, ${fmt(Number(r.amountRequested))}`);
   const who = (await names([c.userId])).get(c.userId);
-  tellRoles(APPROVERS, `💰 Запрос денег №${r.id} (${KIND_RU[r.kind]}) на ${fmt(Number(r.amountRequested))}\n${r.title}\nОт: ${who}. Нужно согласовать.`);
-  res.status(201).json({ id: r.id });
-}));
+  tellRoles(APPROVERS, `💰 Запрос денег №${r.id} (${KIND_RU[r.kind]}) на ${fmt(Number(r.amountRequested))}\n${r.title}\nОт: ${who}. Нужно согласовать.\nОткрыть: /m${r.id}`);
+  return ({ id: r.id });
+}
+router.post("/money-requests", ...route(async (req, res, c) => { res.status(201).json(await createMoney(c, req)); }));
 
 router.patch("/money-requests/:id", ...route(async (req, res, c) => {
   const r = await load(Number(req.params.id), c);
@@ -258,7 +262,7 @@ router.patch("/money-requests/:id", ...route(async (req, res, c) => {
   res.json(await detail(r.id, c));
 }));
 
-router.post("/money-requests/:id/action", ...route(async (req, res, c) => {
+export async function moneyAction(c: Ctx, req: ReqLike = {}) {
   const r = await load(Number(req.params.id), c);
   const action = String(req.body?.action ?? "") as Action;
   const comment = String(req.body?.comment ?? "").trim();
@@ -276,19 +280,19 @@ router.post("/money-requests/:id/action", ...route(async (req, res, c) => {
       const amt = amountArg ?? requested;
       set = { status: "approved", amountApproved: String(amt), approvedByClerkId: c.userId, approvedAt: now };
       text = amt !== requested ? `Согласовано на ${fmt(amt)} (запрошено ${fmt(requested)})` : `Согласовано: ${fmt(amt)}`;
-      tell([r.requesterClerkId, holder], `✅ Запрос №${r.id} согласован: ${fmt(amt)}\n${r.title}`, c.userId);
-      tellRoles(CASHIERS, `💸 Запрос №${r.id} согласован — нужно ${r.kind === "advance" ? "выдать" : "оплатить"} ${fmt(amt)}\n${r.title}`);
+      tell([r.requesterClerkId, holder], `✅ Запрос №${r.id} согласован: ${fmt(amt)}\n${r.title}\nОткрыть: /m${r.id}`, c.userId);
+      tellRoles(CASHIERS, `💸 Запрос №${r.id} согласован — нужно ${r.kind === "advance" ? "выдать" : "оплатить"} ${fmt(amt)}\n${r.title}\nОткрыть: /m${r.id}`);
       break;
     }
     case "reject":
       if (!comment) throw new HttpError(400, "Укажите причину отказа");
       set = { status: "rejected", closedAt: now, closedByClerkId: c.userId }; text = "Отклонено";
-      tell([r.requesterClerkId], `❌ Запрос №${r.id} отклонён: ${r.title}\n${comment}`, c.userId);
+      tell([r.requesterClerkId], `❌ Запрос №${r.id} отклонён: ${r.title}\n${comment}\nОткрыть: /m${r.id}`, c.userId);
       break;
     case "cancel":
       if (r.requesterClerkId !== c.userId && !comment) throw new HttpError(400, "Укажите причину отмены");
       set = { status: "cancelled", closedAt: now, closedByClerkId: c.userId }; text = "Отменено";
-      tell([r.requesterClerkId], `✖️ Запрос №${r.id} отменён: ${r.title}`, c.userId);
+      tell([r.requesterClerkId], `✖️ Запрос №${r.id} отменён: ${r.title}\nОткрыть: /m${r.id}`, c.userId);
       break;
     case "issue":
     case "pay": {
@@ -300,11 +304,11 @@ router.post("/money-requests/:id/action", ...route(async (req, res, c) => {
       if (action === "issue") {
         set = { status: "issued", amountIssued: String(amt), payMethod: method, issuedByClerkId: c.userId, issuedAt: now, reportDueAt: addDays(toLocal(now).date, REPORT_DAYS), files: docs };
         text = `Выдано под отчёт ${fmt(amt)} ${methodRu}`;
-        tell([holder, r.requesterClerkId], `💵 Вам выдано под отчёт ${fmt(amt)} (запрос №${r.id}: ${r.title}).\nОтчитайтесь чеками в течение ${REPORT_DAYS} дней.`, c.userId);
+        tell([holder, r.requesterClerkId], `💵 Вам выдано под отчёт ${fmt(amt)} (запрос №${r.id}: ${r.title}).\nОтчитайтесь чеками в течение ${REPORT_DAYS} дней.\nОткрыть: /m${r.id}`, c.userId);
       } else {
         set = { status: "closed", amountIssued: String(amt), payMethod: method, issuedByClerkId: c.userId, issuedAt: now, closedByClerkId: c.userId, closedAt: now, files: docs };
         text = r.kind === "payment" ? `Оплачено ${fmt(amt)} ${methodRu}` : `Компенсация выплачена: ${fmt(amt)} ${methodRu}`;
-        tell([r.requesterClerkId, holder], `✔️ Запрос №${r.id} оплачен: ${fmt(amt)}\n${r.title}`, c.userId);
+        tell([r.requesterClerkId, holder], `✔️ Запрос №${r.id} оплачен: ${fmt(amt)}\n${r.title}\nОткрыть: /m${r.id}`, c.userId);
       }
       break;
     }
@@ -314,36 +318,38 @@ router.post("/money-requests/:id/action", ...route(async (req, res, c) => {
       set = { status: "reported", report: lines, amountSpent: String(spent), reportedAt: now };
       const diff = settlementOf(Number(r.amountIssued ?? 0), spent);
       text = `Отчёт сдан: потрачено ${fmt(spent)} из ${fmt(Number(r.amountIssued ?? 0))}${diff > 0 ? `, вернуть ${fmt(diff)}` : diff < 0 ? `, перерасход ${fmt(-diff)}` : ""}`;
-      tellRoles(CASHIERS, `🧾 Отчёт по запросу №${r.id} сдан — проверьте чеки\n${r.title}: потрачено ${fmt(spent)}`);
+      tellRoles(CASHIERS, `🧾 Отчёт по запросу №${r.id} сдан — проверьте чеки\n${r.title}: потрачено ${fmt(spent)}\nОткрыть: /m${r.id}`);
       break;
     }
     case "return_report":
       if (!comment) throw new HttpError(400, "Напишите, что не так с отчётом");
       set = { status: "issued", reportedAt: null }; text = "Отчёт возвращён на доработку";
-      tell([holder, r.requesterClerkId], `↩️ Отчёт по запросу №${r.id} вернули: ${comment}`, c.userId);
+      tell([holder, r.requesterClerkId], `↩️ Отчёт по запросу №${r.id} вернули: ${comment}\nОткрыть: /m${r.id}`, c.userId);
       break;
     case "close": {
       const diff = settlementOf(Number(r.amountIssued ?? 0), Number(r.amountSpent ?? 0));
       set = { status: "closed", settlement: String(diff), closedByClerkId: c.userId, closedAt: now };
       text = diff > 0 ? `Отчёт принят, остаток ${fmt(diff)} возвращён в кассу` : diff < 0 ? `Отчёт принят, перерасход ${fmt(-diff)} выплачен сотруднику` : "Отчёт принят, расчёт закрыт";
-      tell([holder, r.requesterClerkId], `✔️ Отчёт по запросу №${r.id} принят. ${text}.`, c.userId);
+      tell([holder, r.requesterClerkId], `✔️ Отчёт по запросу №${r.id} принят. ${text}.\nОткрыть: /m${r.id}`, c.userId);
       break;
     }
   }
   await db.update(moneyRequestsTable).set(set).where(eq(moneyRequestsTable.id, r.id));
   await event(r.id, c.userId, "status", comment ? `${text} — ${comment}` : text);
   await logAudit({ action, entityType: "money_request", entityId: r.id, clerkUserId: c.userId, details: text });
-  res.json(await detail(r.id, c));
-}));
+  return (await detail(r.id, c));
+}
+router.post("/money-requests/:id/action", ...route(async (req, res, c) => { res.status(200).json(await moneyAction(c, req)); }));
 
-router.post("/money-requests/:id/comments", ...route(async (req, res, c) => {
+export async function commentMoney(c: Ctx, req: ReqLike = {}) {
   const r = await load(Number(req.params.id), c);
   const text = String(req.body?.text ?? "").trim();
   if (!text || text.length > 2000) throw new HttpError(400, "Пустой или слишком длинный комментарий");
   await event(r.id, c.userId, "comment", text);
   const who = (await names([c.userId])).get(c.userId);
-  tell([r.requesterClerkId, await holderAccount(r.staffId), r.approvedByClerkId, r.issuedByClerkId], `💬 ${who} — запрос №${r.id}:\n${text}`, c.userId);
-  res.json(await detail(r.id, c));
-}));
+  tell([r.requesterClerkId, await holderAccount(r.staffId), r.approvedByClerkId, r.issuedByClerkId], `💬 ${who} — запрос №${r.id}:\n${text}\nОткрыть: /m${r.id}`, c.userId);
+  return (await detail(r.id, c));
+}
+router.post("/money-requests/:id/comments", ...route(async (req, res, c) => { res.status(200).json(await commentMoney(c, req)); }));
 
 export default router;

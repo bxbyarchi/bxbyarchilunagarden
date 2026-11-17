@@ -38,3 +38,12 @@ export async function readStored(folder: Folder, rel: string): Promise<{ buf: Bu
     return { buf, mime: ext === "png" ? "image/png" : ext === "pdf" ? "application/pdf" : "image/jpeg" };
   } catch { return null; }
 }
+
+/** Save raw bytes (e.g. a photo downloaded from Telegram). */
+export async function saveBuffer(folder: Folder, buf: Buffer, ext: "jpg" | "png" | "pdf"): Promise<string> {
+  if (buf.length < 500 || buf.length > 8_000_000) throw new FileError("Неверный размер файла");
+  const rel = `${toLocal(new Date()).date.slice(0, 7)}/${randomUUID()}.${ext}`;
+  await mkdir(path.join(DATA_DIR, folder, rel.slice(0, 7)), { recursive: true });
+  await writeFile(path.join(DATA_DIR, folder, rel), buf);
+  return rel;
+}

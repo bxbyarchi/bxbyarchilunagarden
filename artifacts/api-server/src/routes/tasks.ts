@@ -15,8 +15,9 @@ export const TASK_ADMIN = ["super_admin", "warehouse_chief", "location_admin", "
 const DEPARTMENTS = ["kitchen", "bar", "pastry", "hall", "admin", "tech", "other"];
 const STATUS_RU: Record<string, string> = { new: "Новая", in_progress: "В работе", review: "На проверке", done: "Выполнена", cancelled: "Отменена" };
 
-class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
-type Ctx = WarehouseScope & { isAdmin: boolean; myStaffId: number | null };
+export type ReqLike = { body?: any; params?: any; query?: any };
+export class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
+export type Ctx = WarehouseScope & { isAdmin: boolean; myStaffId: number | null };
 function route(fn: (req: Request, res: Response, ctx: Ctx) => Promise<void>) {
   return [requireAuth(), async (req: Request, res: Response, _next: NextFunction) => {
     try {
@@ -97,7 +98,7 @@ const listCols = {
   comments: sql<number>`(SELECT count(*)::int FROM ${taskEventsTable} e WHERE e.task_id = ${tasksTable.id} AND e.kind = 'comment')`,
 };
 
-router.get("/tasks", ...route(async (req, res, c) => {
+export async function listTasks(c: Ctx, req: ReqLike = {}) {
   const conds: (SQL | undefined)[] = [visible(c)];
   const view = String(req.query.view ?? "mine");
   if (view === "mine") conds.push(c.myStaffId ? eq(tasksTable.assigneeStaffId, c.myStaffId) : sql`false`);
@@ -119,17 +120,19 @@ router.get("/tasks", ...route(async (req, res, c) => {
     .orderBy(...(done ? [desc(tasksTable.completedAt), desc(tasksTable.updatedAt)] : [sql`${tasksTable.dueAt} IS NULL`, asc(tasksTable.dueAt), desc(tasksTable.createdAt)]))
     .limit(done ? 200 : 500);
   const now = new Date();
-  res.json(rows.map((r) => ({ ...r, overdue: isOverdue(r, now) })));
-}));
+  return (rows.map((r) => ({ ...r, overdue: isOverdue(r, now) })));
+}
+router.get("/tasks", ...route(async (req, res, c) => { res.status(200).json(await listTasks(c, req)); }));
 
-router.get("/tasks/summary", ...route(async (_req, res, c) => {
+export async function taskSummary(c: Ctx, req: ReqLike = {}) {
   const now = new Date();
   const mine = c.myStaffId ? await db.select({ status: tasksTable.status, dueAt: tasksTable.dueAt }).from(tasksTable)
     .where(and(eq(tasksTable.assigneeStaffId, c.myStaffId), inArray(tasksTable.status, OPEN))) : [];
   const [rev] = await db.select({ n: sql<number>`count(*)::int` }).from(tasksTable)
     .where(and(eq(tasksTable.status, "review"), c.isAdmin ? undefined : eq(tasksTable.creatorClerkId, c.userId)));
-  res.json({ hasStaffCard: !!c.myStaffId, myOpen: mine.filter((t) => t.status !== "review").length, myOverdue: mine.filter((t) => isOverdue(t, now)).length, toReview: rev.n, isAdmin: c.isAdmin });
-}));
+  return ({ hasStaffCard: !!c.myStaffId, myOpen: mine.filter((t) => t.status !== "review").length, myOverdue: mine.filter((t) => isOverdue(t, now)).length, toReview: rev.n, isAdmin: c.isAdmin });
+}
+router.get("/tasks/summary", ...route(async (req, res, c) => { res.status(200).json(await taskSummary(c, req)); }));
 
 router.get("/tasks/assignees", ...route(async (_req, res) => {
   res.json(await db.select({ id: staffTable.id, name: staffTable.name, position: staffTable.position, department: staffTable.department, hasAccount: sql<boolean>`${staffTable.userClerkId} IS NOT NULL` })
@@ -156,7 +159,7 @@ router.get("/tasks/efficiency", ...route(async (req, res, c) => {
 
 // ─── One task ───────────────────────────────────────────────────────────────
 
-async function detail(id: number, c: Ctx) {
+export async function detail(id: number, c: Ctx) {
   const t = await load(id, c);
   const ev = await db.select().from(taskEventsTable).where(eq(taskEventsTable.taskId, id)).orderBy(asc(taskEventsTable.createdAt), asc(taskEventsTable.id));
   const ids = [...new Set([t.creatorClerkId, ...ev.map((e) => e.authorClerkId)].filter(Boolean))] as string[];
@@ -175,18 +178,19 @@ async function detail(id: number, c: Ctx) {
 
 router.get("/tasks/:id", ...route(async (req, res, c) => { res.json(await detail(Number(req.params.id), c)); }));
 
-router.post("/tasks", ...route(async (req, res, c) => {
+export async function createTask(c: Ctx, req: ReqLike = {}) {
   const v = parseBody(req.body ?? {}, false);
   await checkAssignee(v.assigneeStaffId);
   if (v.repeat && !v.dueAt) throw new HttpError(400, "Для повторяющейся задачи нужен срок");
   const [t] = await db.insert(tasksTable).values({ ...v, title: v.title!, creatorClerkId: c.userId }).returning();
   await event(t.id, c.userId, "status", "Задача поставлена");
   const acc = await assigneeAccount(t.assigneeStaffId);
-  notify([acc], `📋 Новая задача от ${await userName(c.userId)}:\n${t.title}\nСрок: ${fmtDue(t.dueAt)}${t.priority === "urgent" ? "\n❗ Срочно" : ""}`, c.userId);
-  res.status(201).json({ id: t.id });
-}));
+  notify([acc], `📋 Новая задача от ${await userName(c.userId)}:\n${t.title}\nСрок: ${fmtDue(t.dueAt)}${t.priority === "urgent" ? "\n❗ Срочно" : ""}\nОткрыть: /t${t.id}`, c.userId);
+  return ({ id: t.id });
+}
+router.post("/tasks", ...route(async (req, res, c) => { res.status(201).json(await createTask(c, req)); }));
 
-router.patch("/tasks/:id", ...route(async (req, res, c) => {
+export async function updateTask(c: Ctx, req: ReqLike = {}) {
   const t = await load(Number(req.params.id), c);
   const w = who(t, c);
   const body = req.body ?? {};
@@ -208,7 +212,7 @@ router.patch("/tasks/:id", ...route(async (req, res, c) => {
   if (v.assigneeStaffId !== undefined && v.assigneeStaffId !== t.assigneeStaffId) {
     const [s] = v.assigneeStaffId ? await db.select({ name: staffTable.name }).from(staffTable).where(eq(staffTable.id, v.assigneeStaffId)) : [];
     changes.push(`исполнитель → ${s?.name ?? "не назначен"}`);
-    notify([await assigneeAccount(v.assigneeStaffId)], `📋 Вам передали задачу:\n${v.title ?? t.title}\nСрок: ${fmtDue(v.dueAt !== undefined ? v.dueAt : t.dueAt)}`, c.userId);
+    notify([await assigneeAccount(v.assigneeStaffId)], `📋 Вам передали задачу:\n${v.title ?? t.title}\nСрок: ${fmtDue(v.dueAt !== undefined ? v.dueAt : t.dueAt)}\nОткрыть: /t${t.id}`, c.userId);
   }
   if (v.checklist) {
     const doneNow = v.checklist.filter((i) => i.done).length, doneBefore = t.checklist.filter((i) => i.done).length;
@@ -217,10 +221,11 @@ router.patch("/tasks/:id", ...route(async (req, res, c) => {
   }
   for (const k of ["zone", "department", "repeat", "needsReview"] as const) if (v[k] !== undefined && v[k] !== t[k]) changes.push(({ zone: "зона", department: "отдел", repeat: "повтор", needsReview: "проверка" })[k]);
   if (changes.length) await event(t.id, c.userId, "edit", `Изменено: ${changes.join(", ")}`);
-  res.json(await detail(t.id, c));
-}));
+  return (await detail(t.id, c));
+}
+router.patch("/tasks/:id", ...route(async (req, res, c) => { res.status(200).json(await updateTask(c, req)); }));
 
-router.post("/tasks/:id/status", ...route(async (req, res, c) => {
+export async function setTaskStatus(c: Ctx, req: ReqLike = {}) {
   const t = await load(Number(req.params.id), c);
   const to = String(req.body?.to ?? "") as TaskStatus;
   const comment = String(req.body?.comment ?? "").trim();
@@ -244,9 +249,9 @@ router.post("/tasks/:id/status", ...route(async (req, res, c) => {
 
   const acc = await assigneeAccount(t.assigneeStaffId);
   const actor = await userName(c.userId);
-  if (to === "review") notify([t.creatorClerkId], `✅ Задача выполнена, проверьте:\n${t.title}\nИсполнитель: ${actor}`, c.userId);
-  else if (to === "done") notify([t.creatorClerkId, acc], `✔️ Задача закрыта: ${t.title}`, c.userId);
-  else if (from === "review" && to === "in_progress") notify([acc], `↩️ Задачу вернули на доработку:\n${t.title}${comment ? `\n${comment}` : ""}`, c.userId);
+  if (to === "review") notify([t.creatorClerkId], `✅ Задача выполнена, проверьте:\n${t.title}\nИсполнитель: ${actor}\nОткрыть: /t${t.id}`, c.userId);
+  else if (to === "done") notify([t.creatorClerkId, acc], `✔️ Задача закрыта: ${t.title}\nОткрыть: /t${t.id}`, c.userId);
+  else if (from === "review" && to === "in_progress") notify([acc], `↩️ Задачу вернули на доработку:\n${t.title}${comment ? `\n${comment}` : ""}\nОткрыть: /t${t.id}`, c.userId);
   else if (to === "cancelled") notify([acc], `✖️ Задача отменена: ${t.title}${comment ? `\n${comment}` : ""}`, c.userId);
 
   // Recurring: closing one copy sets the next one up.
@@ -261,18 +266,20 @@ router.post("/tasks/:id/status", ...route(async (req, res, c) => {
       await event(n.id, null, "status", `Повторяющаяся задача, создана после выполнения №${t.id}`);
     }
   }
-  res.json(await detail(t.id, c));
-}));
+  return (await detail(t.id, c));
+}
+router.post("/tasks/:id/status", ...route(async (req, res, c) => { res.status(200).json(await setTaskStatus(c, req)); }));
 
-router.post("/tasks/:id/comments", ...route(async (req, res, c) => {
+export async function commentTask(c: Ctx, req: ReqLike = {}) {
   const t = await load(Number(req.params.id), c);
   const text = String(req.body?.text ?? "").trim();
   if (!text) throw new HttpError(400, "Пустой комментарий");
   if (text.length > 2000) throw new HttpError(400, "Слишком длинный комментарий");
   await event(t.id, c.userId, "comment", text);
-  notify([t.creatorClerkId, await assigneeAccount(t.assigneeStaffId)], `💬 ${await userName(c.userId)} — «${t.title}»:\n${text}`, c.userId);
-  res.json(await detail(t.id, c));
-}));
+  notify([t.creatorClerkId, await assigneeAccount(t.assigneeStaffId)], `💬 ${await userName(c.userId)} — «${t.title}»:\n${text}\nОткрыть: /t${t.id}`, c.userId);
+  return (await detail(t.id, c));
+}
+router.post("/tasks/:id/comments", ...route(async (req, res, c) => { res.status(200).json(await commentTask(c, req)); }));
 
 // ─── Overdue reminders (Telegram) ───────────────────────────────────────────
 
@@ -280,7 +287,7 @@ export async function remindOverdue(now = new Date()): Promise<number> {
   const rows = await db.select().from(tasksTable).where(and(inArray(tasksTable.status, ["new", "in_progress"]), lt(tasksTable.dueAt, now), isNull(tasksTable.overdueNotifiedAt)));
   for (const t of rows) {
     await db.update(tasksTable).set({ overdueNotifiedAt: now }).where(eq(tasksTable.id, t.id));
-    notify([await assigneeAccount(t.assigneeStaffId), t.creatorClerkId], `⏰ Просрочена задача: ${t.title}\nСрок был: ${fmtDue(t.dueAt)}`);
+    notify([await assigneeAccount(t.assigneeStaffId), t.creatorClerkId], `⏰ Просрочена задача: ${t.title}\nСрок был: ${fmtDue(t.dueAt)}\nОткрыть: /t${t.id}`);
   }
   return rows.length;
 }
