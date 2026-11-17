@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
 import { useSignOut, BRAND_NAME } from "@/hooks/useAuthState";
-import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3, CalendarDays, UserRound, Bot, CalendarRange, Clock, ScanFace, ListTodo } from "lucide-react";
+import { LayoutDashboard, Package, Tags, ArrowDownToLine, ArrowUpFromLine, ClipboardCheck, Users, History, Settings, LogOut, KeyRound, FileBarChart, Menu, X, MapPin, Truck, Home, Unlock, PieChart, Calculator, ChefHat, Factory, TrendingUp, Contact, BarChart3, CalendarDays, UserRound, Bot, CalendarRange, Clock, ScanFace, ListTodo, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/roles";
 
@@ -42,6 +42,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const PERSONNEL_ADMIN = ["super_admin", "warehouse_chief", "location_admin", "manager"];
   const personnelNavigation = [
     { name: "Задачи", href: "/tasks", icon: ListTodo, roles: undefined as string[] | undefined, testId: "tasks" },
+    { name: "Запросы денег", href: "/money-requests", icon: Wallet, roles: undefined as string[] | undefined, testId: "money-requests" },
     { name: "Сотрудники", href: "/staff", icon: Users, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "staff" },
     { name: "График смен", href: "/schedule", icon: CalendarRange, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "schedule" },
     { name: "Табель", href: "/timesheet", icon: Clock, roles: [...PERSONNEL_ADMIN, "accountant"], testId: "timesheet" },

@@ -37,6 +37,8 @@ app.use(helmetMiddleware);
 app.use(corsMiddleware);
 // Check-in photos from the kiosk are larger than the default 100 KB body limit.
 app.use("/api/personnel/kiosk", express.json({ limit: "2mb" }));
+// Invoices and receipt photos (up to 4 MB as base64).
+app.use("/api/money-requests/files", express.json({ limit: "6mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Local login sessions (cookie) → req.auth.userId. Runs before the limiter

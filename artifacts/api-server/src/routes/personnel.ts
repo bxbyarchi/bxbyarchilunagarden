@@ -1,7 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
-import path from "node:path";
+import { createHash } from "node:crypto";
+import { saveDataUrl, readStored, FileError } from "../lib/files";
 import { requireAuth } from "../lib/requireAuth";
 import { db, staffTable, staffSchedulesTable, attendanceTable, usersTable, locationsTable } from "@workspace/db";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
@@ -54,18 +53,9 @@ async function staffInScope(scope: WarehouseScope, id: number) {
 const pinHash = (pin: string) => createHash("sha256").update(`lg-pin:${pin}`).digest("hex");
 const num = (v: unknown) => (v === "" || v == null ? null : Number.isFinite(Number(v)) && Number(v) >= 0 ? String(Number(v)) : (() => { throw new HttpError(400, "Неверная ставка"); })());
 
-const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), "data"));
-const PHOTO_RE = /^\d{4}-\d{2}\/[0-9a-f-]{36}\.jpg$/;
 async function savePhoto(dataUrl: unknown): Promise<string | null> {
   if (dataUrl == null || dataUrl === "") return null;
-  const m = typeof dataUrl === "string" ? /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl) : null;
-  if (!m) throw new HttpError(400, "Фото должно быть в формате JPEG");
-  const buf = Buffer.from(m[1], "base64");
-  if (buf.length < 1000 || buf.length > 1_500_000) throw new HttpError(400, "Неверный размер фото");
-  const rel = `${toLocal(new Date()).date.slice(0, 7)}/${randomUUID()}.jpg`;
-  await mkdir(path.join(DATA_DIR, "attendance", rel.slice(0, 7)), { recursive: true });
-  await writeFile(path.join(DATA_DIR, "attendance", rel), buf);
-  return rel;
+  try { return await saveDataUrl("attendance", dataUrl); } catch (e) { if (e instanceof FileError) throw new HttpError(400, e.message); throw e; }
 }
 const photoUrl = (rel: string | null) => (rel ? `/api/personnel/photo/${rel}` : null);
 
@@ -254,12 +244,9 @@ router.post("/personnel/kiosk", ...route(KIOSK, async (req, res, scope) => {
 }));
 
 router.get("/personnel/photo/:month/:file", ...route(VIEW, async (req, res) => {
-  const rel = `${req.params.month}/${req.params.file}`;
-  if (!PHOTO_RE.test(rel)) throw new HttpError(404, "Нет фото");
-  try {
-    const buf = await readFile(path.join(DATA_DIR, "attendance", rel));
-    res.setHeader("Content-Type", "image/jpeg"); res.setHeader("Cache-Control", "private, max-age=86400"); res.end(buf);
-  } catch { throw new HttpError(404, "Нет фото"); }
+  const f = await readStored("attendance", `${req.params.month}/${req.params.file}`);
+  if (!f) throw new HttpError(404, "Нет фото");
+  res.setHeader("Content-Type", f.mime); res.setHeader("Cache-Control", "private, max-age=86400"); res.end(f.buf);
 }));
 
 // ─── Attendance log and corrections ─────────────────────────────────────────

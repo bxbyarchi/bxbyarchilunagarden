@@ -36,6 +36,7 @@ const visible = (c: Ctx): SQL | undefined => c.isAdmin ? undefined
 const who = (t: typeof tasksTable.$inferSelect, c: Ctx) => ({ isAdmin: c.isAdmin, isCreator: t.creatorClerkId === c.userId, isAssignee: !!c.myStaffId && t.assigneeStaffId === c.myStaffId });
 
 async function load(id: number, c: Ctx) {
+  if (!Number.isInteger(id) || id <= 0) throw new HttpError(404, "Задача не найдена");
   const [t] = await db.select().from(tasksTable).where(and(eq(tasksTable.id, id), visible(c)));
   if (!t) throw new HttpError(404, "Задача не найдена");
   return t;
