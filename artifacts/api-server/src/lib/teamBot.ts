@@ -5,7 +5,13 @@
  */
 import type { Context, Telegraf } from "telegraf";
 import { db, usersTable, staffTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+import { advisorChatsTable } from "@workspace/db";
+import { ask, AdvisorError } from "./advisor/advisor";
+import { availableModels, modelLabel } from "./llm/catalog";
+import { internalSession } from "./session";
+import { buildDigest } from "./digest";
+import { getSettings } from "./ai/agent";
 import { logger } from "./logger";
 import { saveBuffer } from "./files";
 import { APPROVERS, CASHIERS } from "./moneyMath";
@@ -17,7 +23,9 @@ import {
   HttpError as MoneyError, listMoney, moneySummary, detail as moneyDetail, createMoney, moneyAction, commentMoney, type Ctx as MoneyCtx,
 } from "../routes/money";
 
-export const TEAM_BTN = { TASKS: "📋 Задачи", MONEY: "💰 Деньги" } as const;
+export const TEAM_BTN = { TASKS: "📋 Задачи", MONEY: "💰 Деньги", AI: "🤖 Спросить ИИ" } as const;
+// Warehouse-bot menu buttons: pressing one leaves the AI chat mode.
+const LEGACY_BTNS = ["📊 Аналитика и Отчёты", "📦 Управление Складом", "⚙️ Настройки и Доступы", "👤 Профиль", "⬅️ Назад в меню", "📦 Все остатки", "🔍 Поиск товара", "⚠️ Критический остаток", "📸 Новое списание", "➕ Оприходование"];
 
 type Line = { name: string; amount: number; file: string | null };
 type State =
@@ -30,7 +38,8 @@ type State =
   | { flow: "money_receipt"; amount: number; title: string }
   | { flow: "money_reason"; id: number; action: "reject" | "return_report" | "cancel" }
   | { flow: "money_comment"; id: number }
-  | { flow: "report"; id: number; lines: Line[] };
+  | { flow: "report"; id: number; lines: Line[] }
+  | { flow: "ai" };
 const state = new Map<number, State>();
 
 type Btn = { text: string; callback_data: string };
@@ -215,6 +224,49 @@ async function downloadPhoto(ctx: Context, fileId: string): Promise<string> {
   return saveBuffer("money", Buffer.from(await r.arrayBuffer()), "jpg");
 }
 
+// ─── AI advisor in Telegram (same chats and memory as on the site) ─────────────────────────
+
+/** The user's latest advisor chat — continuing on the phone what was started on the computer. */
+async function aiChat(a: Acc, fresh = false) {
+  if (!fresh) {
+    const [c] = await db.select().from(advisorChatsTable).where(eq(advisorChatsTable.userClerkId, a.user.clerkUserId)).orderBy(desc(advisorChatsTable.updatedAt)).limit(1);
+    if (c) return c;
+  }
+  const [c] = await db.insert(advisorChatsTable).values({ userClerkId: a.user.clerkUserId }).returning();
+  return c;
+}
+/** Telegram has no Markdown tables/headings in plain mode — keep the text readable. */
+export function plainText(md: string) {
+  return md.replace(/^#{1,4}\s+/gm, "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/(^|\s)_(.+?)_(?=\s|$)/g, "$1$2").replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*[-*]\s+/gm, "• ").replace(/^\|?\s*:?-{2,}.*$/gm, "").replace(/^\|(.+)\|\s*$/gm, (_, row: string) => row.split("|").map((c) => c.trim()).join(" — ")).replace(/\n{3,}/g, "\n\n").trim();
+}
+const aiKb = () => kb([[b("🆕 Новый разговор", "ainew"), b("⚙️ Модель", "aimodel")]]);
+
+async function aiStart(ctx: Context, a: Acc, fresh = false) {
+  const c = await aiChat(a, fresh);
+  state.set(ctx.chat!.id, { flow: "ai" });
+  const model = c.model ?? (await getSettings()).advisorModel;
+  await ctx.reply(`🤖 Спрашивайте — про продажи, склад, персонал, задачи, деньги или как что-то сделать в CRM.\nМодель: ${model === "auto" ? "авто (бесплатная, если подключена)" : modelLabel(model)}${fresh ? "\nНачат новый разговор." : c.title !== "Новый вопрос" ? `\nПродолжаем: «${c.title}»` : ""}\nЧтобы выйти — нажмите любую кнопку меню.`, aiKb());
+}
+
+async function aiAsk(ctx: Context, a: Acc, text: string) {
+  const c = await aiChat(a);
+  const typing = setInterval(() => { void ctx.sendChatAction("typing").catch(() => {}); }, 4500);
+  void ctx.sendChatAction("typing").catch(() => {});
+  const session = await internalSession(a.user.id);
+  try {
+    const name = [a.user.firstName, a.user.lastName].filter(Boolean).join(" ") || a.user.email;
+    const m = await ask(c.id, { clerkId: a.user.clerkUserId, name, role: a.user.role }, text, session.cookie, { channel: "telegram" });
+    const body = m.error ? `Не получилось ответить: ${m.error}` : plainText(m.text);
+    const footer = m.model && !m.error ? `\n\n— ${modelLabel(m.model)}` : "";
+    const chunks = (body + footer).match(/[\s\S]{1,3900}/g) ?? [""];
+    for (let i = 0; i < chunks.length; i++) await ctx.reply(chunks[i], i === chunks.length - 1 ? aiKb() : undefined);
+  } catch (e) {
+    await ctx.reply(e instanceof AdvisorError ? `⛔ ${e.message}` : "Советник сейчас недоступен, попробуйте позже.");
+    if (!(e instanceof AdvisorError)) logger.error({ err: e }, "telegram advisor failed");
+  } finally { clearInterval(typing); await session.end(); }
+}
+
 // ─── Wiring ─────────────────────────────────────────────────────────────────
 
 export function registerTeamBot(bot: Telegraf) {
@@ -229,6 +281,27 @@ export function registerTeamBot(bot: Telegraf) {
 
   bot.command("tasks", (ctx) => guard(ctx, (a) => tasksMenu(ctx, a)));
   bot.command("money", (ctx) => guard(ctx, (a) => moneyMenu(ctx, a)));
+  bot.command("ai", (ctx) => guard(ctx, (a) => aiStart(ctx, a)));
+  bot.command("report", (ctx) => guard(ctx, async (a) => {
+    if (!["super_admin", "manager", "accountant"].includes(a.user.role)) { await ctx.reply("⛔ Сводка доступна владельцу, управляющим и бухгалтеру."); return; }
+    await ctx.sendChatAction("typing").catch(() => {});
+    await ctx.reply(await buildDigest());
+  }));
+  cb(/^ainew$/, (ctx, a) => aiStart(ctx, a, true));
+  cb(/^aimodel$/, async (ctx) => {
+    const models = await availableModels();
+    if (!models.length) { await ctx.reply("ИИ ещё не подключён — нужен ключ Anthropic или OpenRouter."); return; }
+    await ctx.reply("Выберите модель (история разговора сохранится):", kb([[b("Авто — бесплатная, если подключена", "aim:auto")], ...models.map((m, i) => [b(`${m.free ? "🆓" : "⭐"} ${m.label}`, `aim:${i}`)])]));
+  });
+  cb(/^aim:(auto|\d+)$/, async (ctx, a) => {
+    const models = await availableModels();
+    const id = ctx.match[1] === "auto" ? "auto" : models[Number(ctx.match[1])]?.id;
+    if (!id) { await ctx.reply("Список моделей обновился — откройте выбор ещё раз."); return; }
+    const c = await aiChat(a);
+    await db.update(advisorChatsTable).set({ model: id }).where(eq(advisorChatsTable.id, c.id));
+    state.set(ctx.chat!.id, { flow: "ai" });
+    await show(ctx, `✅ Модель: ${id === "auto" ? "авто" : modelLabel(id)}. Спрашивайте.`, kb([]), true);
+  });
   bot.hears(/^\/t(\d+)$/, (ctx) => guard(ctx, (a) => taskCard(ctx, a, Number(ctx.match[1]), false)));
   bot.hears(/^\/m(\d+)$/, (ctx) => guard(ctx, (a) => moneyCard(ctx, a, Number(ctx.match[1]), false)));
 
@@ -346,7 +419,10 @@ export function registerTeamBot(bot: Telegraf) {
     const chatId = ctx.chat.id;
     if (text === TEAM_BTN.TASKS) { state.delete(chatId); return guard(ctx, (a) => tasksMenu(ctx, a)); }
     if (text === TEAM_BTN.MONEY) { state.delete(chatId); return guard(ctx, (a) => moneyMenu(ctx, a)); }
+    if (text === TEAM_BTN.AI) return guard(ctx, (a) => aiStart(ctx, a));
     const st = state.get(chatId);
+    if (st?.flow === "ai" && LEGACY_BTNS.includes(text)) { state.delete(chatId); return next(); }
+    if (st?.flow === "ai" && !text.startsWith("/")) return guard(ctx, (a) => aiAsk(ctx, a, text));
     if (!st || text.startsWith("/")) return next();
     await guard(ctx, async (a) => {
       switch (st.flow) {

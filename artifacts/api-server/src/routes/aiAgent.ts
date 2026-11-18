@@ -6,7 +6,7 @@ import { and, desc, eq, gte, isNotNull, sql, type SQL } from "drizzle-orm";
 import { getWarehouseScope } from "../lib/warehouseScope";
 import { logAudit } from "../lib/auditLogger";
 import { handleGuestMessage, findOrCreateConversation, getSettings, conversationsTail } from "../lib/ai/agent";
-import { AGENT_MODELS } from "../lib/ai/helpers";
+import { GUEST_MODELS, DEFAULT_GUEST_MODEL, CLAUDE_MODELS, availableModels, hasAnthropic, hasOpenRouter } from "../lib/llm/catalog";
 
 const router: IRouter = Router();
 const VIEW_ROLES = ["super_admin", "location_admin", "manager", "cashier", "warehouse_chief"];
@@ -145,7 +145,11 @@ router.get("/ai/errors", ...view, handle(async (_req, res) => {
 
 router.get("/ai/settings", ...view, handle(async (_req, res) => {
   const s = await getSettings();
-  res.json({ ...s, depositPerGuest: s.depositPerGuest == null ? null : Number(s.depositPerGuest), models: AGENT_MODELS, apiKeyConfigured: !!process.env.ANTHROPIC_API_KEY });
+  res.json({
+    ...s, model: GUEST_MODELS.includes(s.model) ? s.model : DEFAULT_GUEST_MODEL, depositPerGuest: s.depositPerGuest == null ? null : Number(s.depositPerGuest),
+    models: GUEST_MODELS, modelLabels: Object.fromEntries(CLAUDE_MODELS.map((m) => [m.id, m.label])),
+    advisorModels: await availableModels(), apiKeyConfigured: hasAnthropic(), openRouterConfigured: hasOpenRouter(),
+  });
 }));
 
 router.put("/ai/settings", ...admin, handle(async (req, res) => {
@@ -153,7 +157,13 @@ router.put("/ai/settings", ...admin, handle(async (req, res) => {
   const txt = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) || null : null);
   const values: Partial<typeof aiSettingsTable.$inferInsert> = {};
   if (b.enabled !== undefined) values.enabled = b.enabled !== false;
-  if (b.model !== undefined) { if (!AGENT_MODELS.includes(String(b.model))) throw new HttpError(400, "Неизвестная модель"); values.model = String(b.model); }
+  if (b.model !== undefined) { if (!GUEST_MODELS.includes(String(b.model))) throw new HttpError(400, "Для гостей доступны только сильные модели (Opus или Sonnet)"); values.model = String(b.model); }
+  if (b.advisorModel !== undefined) {
+    const m = String(b.advisorModel);
+    if (m !== "auto" && !(await availableModels()).some((x) => x.id === m)) throw new HttpError(400, "Модель недоступна — проверьте ключи");
+    values.advisorModel = m;
+  }
+  if (b.digestHour !== undefined) { const h = b.digestHour === null || b.digestHour === "" ? null : Math.round(Number(b.digestHour)); if (h !== null && !(h >= 0 && h <= 23)) throw new HttpError(400, "Час от 0 до 23"); values.digestHour = h; }
   for (const k of ["restaurantInfo", "tone", "depositRules", "paymentDetails"] as const) if (b[k] !== undefined) values[k] = txt(b[k], 4000);
   if (b.knowledge !== undefined) values.knowledge = txt(b.knowledge, 30000);
   if (b.maxPartyForAi !== undefined) { const n = Math.round(Number(b.maxPartyForAi)); if (!(n >= 1 && n <= 500)) throw new HttpError(400, "Число гостей от 1 до 500"); values.maxPartyForAi = n; }

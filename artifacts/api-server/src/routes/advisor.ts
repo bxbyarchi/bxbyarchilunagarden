@@ -3,6 +3,8 @@ import { requireAuth } from "../lib/requireAuth";
 import { db, advisorChatsTable, advisorMessagesTable, usersTable } from "@workspace/db";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { ask, chatMessages, AdvisorError, DAILY_LIMIT } from "../lib/advisor/advisor";
+import { availableModels, hasAnthropic, hasOpenRouter, modelLabel } from "../lib/llm/catalog";
+import { getSettings } from "../lib/ai/agent";
 
 const router: IRouter = Router();
 
@@ -24,7 +26,7 @@ const handle = (fn: (req: Request, res: Response) => Promise<void>) => async (re
     throw e;
   }
 };
-const shape = (m: typeof advisorMessagesTable.$inferSelect) => ({ id: m.id, role: m.role, text: m.text, actions: m.actions, error: m.error, costUsd: m.costUsd == null ? null : Number(m.costUsd), createdAt: m.createdAt });
+const shape = (m: typeof advisorMessagesTable.$inferSelect) => ({ id: m.id, role: m.role, text: m.text, actions: m.actions, error: m.error, model: m.model, modelLabel: m.role === "assistant" && m.model ? modelLabel(m.model) : null, costUsd: m.costUsd == null ? null : Number(m.costUsd), createdAt: m.createdAt });
 
 // Every chat is private to its author — the advisor answers with that person's access rights.
 router.get("/advisor/chats", requireAuth(), handle(async (req, res) => {
@@ -34,7 +36,7 @@ router.get("/advisor/chats", requireAuth(), handle(async (req, res) => {
   const [{ used }] = await db.select({ used: sql<number>`count(*)::int` }).from(advisorMessagesTable)
     .innerJoin(advisorChatsTable, eq(advisorChatsTable.id, advisorMessagesTable.chatId))
     .where(and(eq(advisorChatsTable.userClerkId, u.clerkUserId), eq(advisorMessagesTable.role, "user"), gte(advisorMessagesTable.createdAt, new Date(Date.now() - 86400_000))));
-  res.json({ chats, used, limit: DAILY_LIMIT, configured: !!process.env.ANTHROPIC_API_KEY });
+  res.json({ chats, used, limit: DAILY_LIMIT, configured: hasAnthropic() || hasOpenRouter(), models: await availableModels(), defaultModel: (await getSettings()).advisorModel });
 }));
 
 router.post("/advisor/chats", requireAuth(), handle(async (req, res) => {
@@ -63,7 +65,9 @@ router.post("/advisor/chats/:id/messages", requireAuth(), handle(async (req, res
   if (!text) throw new AdvisorError(400, "Пустой вопрос");
   if (text.length > 4000) throw new AdvisorError(400, "Слишком длинный вопрос");
   const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email;
-  const m = await ask(c.id, { clerkId: u.clerkUserId, name, role: u.role }, text, String(req.headers.cookie ?? ""));
+  const model = req.body?.model === undefined ? undefined : req.body.model ? String(req.body.model) : null;
+  if (model && model !== "auto" && !(await availableModels()).some((x) => x.id === model)) throw new AdvisorError(400, "Эта модель сейчас недоступна");
+  const m = await ask(c.id, { clerkId: u.clerkUserId, name, role: u.role }, text, String(req.headers.cookie ?? ""), { model });
   res.json(shape(m));
 }));
 

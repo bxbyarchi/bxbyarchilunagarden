@@ -2,38 +2,30 @@
  * Internal AI advisor for the team: answers questions about the CRM and analyses the
  * restaurant's data by opening CRM reports with the asking user's own permissions.
  */
-import Anthropic from "@anthropic-ai/sdk";
 import { db, advisorChatsTable, advisorMessagesTable } from "@workspace/db";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { CRM_GUIDE } from "./guide";
 import { REPORTS, REPORT_NAMES, reportUrl, shrink } from "./reports";
 import { getSettings } from "../ai/agent";
-import { AGENT_MODELS, costUsd, toLocal } from "../ai/helpers";
+import { toLocal } from "../ai/helpers";
 import { logger } from "../logger";
+import { runTurn, LlmError, type Tool } from "../llm/loop";
+import { resolveAdvisorModel, hasAnthropic, hasOpenRouter, modelLabel } from "../llm/catalog";
 
-const MAX_ROUNDS = 8;
 const HISTORY = 20;
 export const DAILY_LIMIT = Number(process.env.ADVISOR_DAILY_LIMIT || 60);
 const ROLE_RU: Record<string, string> = { super_admin: "супер-админ (владелец)", warehouse_chief: "завхоз", manager: "управляющий", accountant: "бухгалтер", warehouse: "кладовщик", location_admin: "админ площадки", cashier: "кассир" };
 
 export class AdvisorError extends Error { constructor(public status: number, message: string) { super(message); } }
 
-let client: Anthropic | null = null;
-function getClient() {
-  if (!process.env.ANTHROPIC_API_KEY) throw new AdvisorError(503, "Не настроен ключ ANTHROPIC_API_KEY — ИИ-советник выключен");
-  client ??= new Anthropic();
-  return client;
-}
-
-const TOOLS: Anthropic.Beta.BetaToolUnion[] = [{
+const TOOLS: Tool[] = [{
   name: "open_report",
   description: `Открыть отчёт CRM с правами текущего пользователя и получить данные в JSON. Если роли отчёт недоступен — вернётся ошибка доступа.
 Отчёты:
 ${REPORT_NAMES.map((n) => `- ${n}: ${REPORTS[n].about}${REPORTS[n].period ? " (нужен период from/to)" : ""}`).join("\n")}
 Даты — YYYY-MM-DD по времени Бишкека, to включительно. Для отчётов без периода передавай from и to = null. q — только для stock_items и knowledge, иначе null.
 Длинные списки обрезаются; если нужно — сузь период.`,
-  strict: true,
-  input_schema: {
+  parameters: {
     type: "object",
     properties: {
       report: { type: "string", enum: REPORT_NAMES },
@@ -66,11 +58,11 @@ const SYSTEM = `Ты — ИИ-советник внутри CRM ресторан
 
 ${CRM_GUIDE}`;
 
-function ctxMessage(user: { name: string; role: string }) {
+function ctxMessage(user: { name: string; role: string }, channel: "web" | "telegram") {
   const now = toLocal(new Date());
-  const d = new Date();
-  const weekday = d.toLocaleDateString("ru-RU", { timeZone: "Asia/Bishkek", weekday: "long" });
-  return `Сейчас ${weekday}, ${now.date} ${now.time} (время Бишкека). Спрашивает: ${user.name}, роль — ${ROLE_RU[user.role] ?? user.role}.`;
+  const weekday = new Date().toLocaleDateString("ru-RU", { timeZone: "Asia/Bishkek", weekday: "long" });
+  return `Сейчас ${weekday}, ${now.date} ${now.time} (время Бишкека). Спрашивает: ${user.name}, роль — ${ROLE_RU[user.role] ?? user.role}.`
+    + (channel === "telegram" ? " Ответ пойдёт в Telegram: пиши коротко (до ~1200 знаков), без таблиц и заголовков Markdown — простые строки и списки с «•»." : "");
 }
 
 async function runReport(input: Record<string, unknown>, cookie: string) {
@@ -93,79 +85,62 @@ async function runReport(input: Record<string, unknown>, cookie: string) {
 
 const running = new Set<number>();
 
-export async function ask(chatId: number, user: { clerkId: string; name: string; role: string }, text: string, cookie: string) {
+export type AskOptions = { channel?: "web" | "telegram"; model?: string | null };
+
+export async function ask(chatId: number, user: { clerkId: string; name: string; role: string }, text: string, cookie: string, opts: AskOptions = {}) {
   if (running.has(chatId)) throw new AdvisorError(409, "Советник ещё отвечает на предыдущий вопрос");
+  if (!hasAnthropic() && !hasOpenRouter()) throw new AdvisorError(503, "Не настроен ни один ИИ: добавьте ANTHROPIC_API_KEY и/или OPENROUTER_API_KEY");
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(advisorMessagesTable)
     .innerJoin(advisorChatsTable, eq(advisorChatsTable.id, advisorMessagesTable.chatId))
     .where(and(eq(advisorChatsTable.userClerkId, user.clerkId), eq(advisorMessagesTable.role, "user"), gte(advisorMessagesTable.createdAt, new Date(Date.now() - 86400_000))));
   if (n >= DAILY_LIMIT) throw new AdvisorError(429, `Лимит ${DAILY_LIMIT} вопросов в сутки исчерпан — попробуйте завтра`);
   running.add(chatId);
   try {
-    await db.insert(advisorMessagesTable).values({ chatId, role: "user", text });
     const chat = await db.query.advisorChatsTable.findFirst({ where: eq(advisorChatsTable.id, chatId) });
-    if (chat?.title === "Новый вопрос") await db.update(advisorChatsTable).set({ title: text.replace(/\s+/g, " ").slice(0, 70) }).where(eq(advisorChatsTable.id, chatId));
-    await db.update(advisorChatsTable).set({ updatedAt: new Date() }).where(eq(advisorChatsTable.id, chatId));
+    // History first (before adding the new question) — it is ours, so any model continues the same conversation.
+    const past = (await db.select().from(advisorMessagesTable).where(eq(advisorMessagesTable.chatId, chatId)).orderBy(desc(advisorMessagesTable.createdAt), desc(advisorMessagesTable.id)).limit(HISTORY)).reverse();
+    await db.insert(advisorMessagesTable).values({ chatId, role: "user", text });
+    const patch: Partial<typeof advisorChatsTable.$inferInsert> = { updatedAt: new Date() };
+    if (chat?.title === "Новый вопрос") patch.title = text.replace(/\s+/g, " ").slice(0, 70);
+    if (opts.model !== undefined) patch.model = opts.model;
+    await db.update(advisorChatsTable).set(patch).where(eq(advisorChatsTable.id, chatId));
 
     const settings = await getSettings();
-    const model = AGENT_MODELS.includes(settings.model) ? settings.model : "claude-opus-5-5";
-    const past = (await db.select().from(advisorMessagesTable).where(eq(advisorMessagesTable.chatId, chatId)).orderBy(desc(advisorMessagesTable.createdAt), desc(advisorMessagesTable.id)).limit(HISTORY)).reverse();
-    const messages: Anthropic.Beta.BetaMessageParam[] = [];
-    for (const m of past) {
+    const model = await resolveAdvisorModel(opts.model ?? chat?.model ?? settings.advisorModel);
+    const history: { role: "user" | "assistant"; text: string }[] = [];
+    for (const m of [...past, { role: "user", text, error: null } as const]) {
       if (m.error && m.role === "assistant") continue;
       const role = m.role === "user" ? "user" : "assistant";
-      const last = messages[messages.length - 1];
-      if (last && last.role === role) last.content = `${last.content as string}\n\n${m.text}`;
-      else messages.push({ role, content: m.text });
+      const last = history[history.length - 1];
+      if (last && last.role === role) last.text = `${last.text}\n\n${m.text}`;
+      else history.push({ role, text: m.text });
     }
-    while (messages.length && messages[0].role !== "user") messages.shift();
-    messages.push({ role: "system", content: ctxMessage(user) } as unknown as Anthropic.Beta.BetaMessageParam);
+    while (history.length && history[0].role !== "user") history.shift();
 
     const actions: { report: string; params: Record<string, unknown>; ok: boolean }[] = [];
-    let inputTokens = 0, outputTokens = 0, answer = "";
     try {
-      const anthropic = getClient();
-      for (let round = 0; round <= MAX_ROUNDS; round++) {
-        const res = await anthropic.beta.messages.create({
-          model, max_tokens: 16000, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
-          thinking: { type: "adaptive" }, output_config: { effort: "medium" }, cache_control: { type: "ephemeral" },
-          system: SYSTEM, tools: TOOLS, messages,
-        });
-        inputTokens += res.usage.input_tokens + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
-        outputTokens += res.usage.output_tokens;
-        if (res.stop_reason === "refusal") throw new AdvisorError(502, "Модель отказалась отвечать на этот вопрос");
-        messages.push({ role: "assistant", content: res.content as Anthropic.Beta.BetaContentBlockParam[] });
-        const uses = res.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
-        const txt = res.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").map((b) => b.text).join("\n").trim();
-        if (res.stop_reason === "pause_turn") continue;
-        if (res.stop_reason !== "tool_use" || !uses.length) {
-          if (!txt) throw new AdvisorError(502, res.stop_reason === "max_tokens" ? "Ответ оборвался по лимиту длины" : "Модель не дала ответа");
-          answer = txt + (res.stop_reason === "max_tokens" ? "\n\n…(ответ оборван по длине — уточните вопрос)" : "");
-          break;
-        }
-        if (round === MAX_ROUNDS) throw new AdvisorError(502, "Слишком много шагов анализа — сузьте вопрос");
-        const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
-        for (const u of uses) {
-          const input = (u.input ?? {}) as Record<string, unknown>;
-          let r: { ok: boolean; text: string };
-          try { r = await runReport(input, cookie); } catch (e) { logger.error({ err: e }, "advisor report failed"); r = { ok: false, text: "Отчёт временно недоступен" }; }
-          actions.push({ report: String(input.report), params: { from: input.from, to: input.to, q: input.q }, ok: r.ok });
-          results.push({ type: "tool_result", tool_use_id: u.id, content: r.text, ...(r.ok ? {} : { is_error: true }) });
-        }
-        messages.push({ role: "user", content: results });
-      }
+      const r = await runTurn({
+        model, system: SYSTEM, history, note: ctxMessage(user, opts.channel ?? "web"), tools: TOOLS,
+        exec: async (name, input) => {
+          if (name !== "open_report") return { ok: false, text: "Нет такого инструмента" };
+          let res: { ok: boolean; text: string };
+          try { res = await runReport(input, cookie); } catch (e) { logger.error({ err: e }, "advisor report failed"); res = { ok: false, text: "Отчёт временно недоступен" }; }
+          actions.push({ report: String(input.report), params: { from: input.from, to: input.to, q: input.q }, ok: res.ok });
+          return res;
+        },
+      });
+      const note = r.fellBackFrom ? `\n\n_Ответила резервная модель (${modelLabel(r.model)}): ${modelLabel(r.fellBackFrom)} сейчас недоступна._` : "";
+      const [m] = await db.insert(advisorMessagesTable).values({
+        chatId, role: "assistant", text: r.text + (r.truncated ? "\n\n…(ответ оборван по длине — уточните вопрос)" : "") + note,
+        model: r.model, inputTokens: r.inputTokens, outputTokens: r.outputTokens, costUsd: String(r.costUsd), actions: actions.length ? actions : null,
+      }).returning();
+      return m;
     } catch (e) {
-      const reason = e instanceof AdvisorError ? e.message
-        : e instanceof Anthropic.RateLimitError ? "Превышен лимит запросов к ИИ, попробуйте через минуту"
-        : e instanceof Anthropic.AuthenticationError ? "Неверный ключ API Anthropic"
-        : e instanceof Anthropic.APIConnectionError ? "Нет связи с сервером ИИ — проверьте интернет"
-        : e instanceof Anthropic.APIError ? `Ошибка ИИ ${e.status ?? ""}: ${e.message}`.slice(0, 300)
-        : "Внутренняя ошибка";
-      if (!(e instanceof AdvisorError)) logger.error({ err: e, chatId }, "advisor turn failed");
-      const [m] = await db.insert(advisorMessagesTable).values({ chatId, role: "assistant", text: "Не получилось ответить.", error: reason, model, inputTokens, outputTokens, costUsd: String(costUsd(model, inputTokens, outputTokens)), actions: actions.length ? actions : null }).returning();
+      const reason = e instanceof LlmError || e instanceof AdvisorError ? e.message : "Внутренняя ошибка";
+      if (!(e instanceof LlmError)) logger.error({ err: e, chatId }, "advisor turn failed");
+      const [m] = await db.insert(advisorMessagesTable).values({ chatId, role: "assistant", text: "Не получилось ответить.", error: reason, model, actions: actions.length ? actions : null }).returning();
       return m;
     }
-    const [m] = await db.insert(advisorMessagesTable).values({ chatId, role: "assistant", text: answer, model, inputTokens, outputTokens, costUsd: String(costUsd(model, inputTokens, outputTokens)), actions: actions.length ? actions : null }).returning();
-    return m;
   } finally {
     running.delete(chatId);
   }

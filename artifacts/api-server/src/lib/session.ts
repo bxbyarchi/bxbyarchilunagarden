@@ -82,3 +82,14 @@ export function sessionMiddleware() {
     next();
   };
 }
+
+/**
+ * A short-lived session for server-side work on a user's behalf (the Telegram advisor opening CRM
+ * reports): the same permission checks apply as in the browser. Returns the Cookie header and a cleanup.
+ */
+export async function internalSession(userId: number, minutes = 5): Promise<{ cookie: string; end: () => Promise<void> }> {
+  const token = randomBytes(32).toString("base64url");
+  const id = hashToken(token);
+  await db.insert(sessionsTable).values({ id, userId, expiresAt: new Date(Date.now() + minutes * 60_000), userAgent: "internal: telegram advisor" });
+  return { cookie: `${SESSION_COOKIE}=${token}`, end: async () => { await db.delete(sessionsTable).where(eq(sessionsTable.id, id)).catch(() => undefined); } };
+}

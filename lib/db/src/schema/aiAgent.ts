@@ -64,6 +64,10 @@ export const aiSettingsTable = pgTable("ai_settings", {
   paymentDetails: text("payment_details"),        // куда переводить предоплату
   knowledge: text("knowledge"),                   // база знаний: акции, банкеты, правила, FAQ
   maxPartyForAi: integer("max_party_for_ai").notNull().default(12), // больше — передать менеджеру
+  // Default model for the internal advisor: "auto" = free (OpenRouter) when set up, else Claude Sonnet.
+  advisorModel: text("advisor_model").notNull().default("auto"),
+  // Morning summary in Telegram for the owner and managers (local hour, null = off).
+  digestHour: integer("digest_hour").default(9),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
@@ -76,6 +80,8 @@ export const advisorChatsTable = pgTable("advisor_chats", {
   id: serial("id").primaryKey(),
   userClerkId: text("user_clerk_id").notNull(),
   title: text("title").notNull().default("Новый вопрос"),
+  // Model chosen for this chat ("auto" or a model id); can change between questions — history is ours.
+  model: text("model"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ userIdx: index("advisor_chats_user_idx").on(t.userClerkId, t.updatedAt) }));

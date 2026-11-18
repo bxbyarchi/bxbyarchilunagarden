@@ -29,7 +29,7 @@ interface ConvDetail extends Omit<ConvRow, "guestName" | "guestPhone" | "last" |
   bookings: { id: number; startsAt: string; partySize: number; status: string; depositAmount: string | null; depositStatus: string }[];
 }
 interface Stats { days: number; guestMessages: number; aiReplies: number; staffReplies: number; errors: number; cost: number; conversations: number; aiBookings: { bookings: number; guests: number; cancelled: number }; needsAttention: number }
-interface Settings { enabled: boolean; model: string; models: string[]; apiKeyConfigured: boolean; restaurantInfo: string | null; tone: string | null; depositRules: string | null; paymentDetails: string | null; knowledge: string | null; maxPartyForAi: number; depositMinParty: number | null; depositPerGuest: number | null }
+interface Settings { enabled: boolean; model: string; models: string[]; apiKeyConfigured: boolean; openRouterConfigured: boolean; advisorModel: string; digestHour: number | null; advisorModels: { id: string; label: string; free: boolean }[]; restaurantInfo: string | null; tone: string | null; depositRules: string | null; paymentDetails: string | null; knowledge: string | null; maxPartyForAi: number; depositMinParty: number | null; depositPerGuest: number | null }
 
 const CHANNEL: Record<string, { label: string; icon: typeof Bot }> = {
   test: { label: "Тест", icon: FlaskConical }, whatsapp: { label: "WhatsApp", icon: MessageCircle }, instagram: { label: "Instagram", icon: Instagram }, phone: { label: "Звонок", icon: Phone },
@@ -183,10 +183,27 @@ function SettingsForm() {
       {!s?.apiKeyConfigured && <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />Ключ Anthropic API не задан на сервере (переменная ANTHROPIC_API_KEY в .env) — агент отвечает гостям только «передал менеджеру».</div>}
       <Card><CardContent className="space-y-4 pt-6">
         <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={f.enabled} onChange={(e) => set("enabled", e.target.checked)} disabled={!canEdit} />Агент включён (если выключить — сообщения копятся для менеджеров)</label>
-        <div className="space-y-1.5"><Label>Модель</Label>
+        <div className="space-y-1.5"><Label>Модель для гостей (WhatsApp, Instagram, звонки)</Label>
           <Select value={f.model} onValueChange={(v) => set("model", v)} disabled={!canEdit}><SelectTrigger className="max-w-sm"><SelectValue /></SelectTrigger>
             <SelectContent>{f.models.map((m) => <SelectItem key={m} value={m}>{MODEL[m] ?? m}</SelectItem>)}</SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">С гостями всегда работает сильная модель — дешёвые и бесплатные здесь не выбираются.</p>
+        </div>
+        <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2">
+          <div className="space-y-1.5"><Label>ИИ-советник для команды — модель по умолчанию</Label>
+            <Select value={f.advisorModel} onValueChange={(v) => set("advisorModel", v)} disabled={!canEdit}><SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="auto">Авто — бесплатная, если подключена, иначе Claude Sonnet</SelectItem>{f.advisorModels.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Каждый может сменить модель прямо в чате — история разговора сохраняется. Если бесплатная модель недоступна, ответит Claude Haiku.</p>
+          </div>
+          <div className="space-y-1.5"><Label>Утренняя сводка в Telegram, час</Label>
+            <Input type="number" min={0} max={23} value={f.digestHour ?? ""} onChange={(e) => set("digestHour", e.target.value === "" ? null : Number(e.target.value))} placeholder="не отправлять" disabled={!canEdit} />
+            <p className="text-xs text-muted-foreground">Владельцу и управляющим: выручка вчера, неявки, просрочки, что заканчивается. Пусто — выключено.</p>
+          </div>
+          <div className="flex flex-wrap gap-3 text-xs sm:col-span-2">
+            <span className={f.apiKeyConfigured ? "text-emerald-700" : "text-amber-700"}>{f.apiKeyConfigured ? "✓" : "✗"} Claude (ANTHROPIC_API_KEY)</span>
+            <span className={f.openRouterConfigured ? "text-emerald-700" : "text-muted-foreground"}>{f.openRouterConfigured ? "✓" : "—"} Бесплатные модели (OPENROUTER_API_KEY)</span>
+          </div>
         </div>
         {area("restaurantInfo", "О ресторане", 4, "Адрес, часы работы, парковка, как добраться, телефон, детская комната…")}
         {area("tone", "Как общаться", 2, "Например: дружелюбно, на «вы», можно эмодзи в меру")}

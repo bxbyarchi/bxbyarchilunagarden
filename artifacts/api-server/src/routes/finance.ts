@@ -11,7 +11,7 @@ const router: IRouter = Router();
 // Profit and payroll are sensitive: owner, managers and accounting only.
 const FINANCE = ["super_admin", "manager", "accountant"];
 
-async function gather(from: string, to: string) {
+export async function gather(from: string, to: string) {
   const start = localDateTime(from, "00:00")!, end = localDateTime(addDays(to, 1), "00:00")!;
   const inSales = and(gte(salesTable.createdAt, start), lt(salesTable.createdAt, end));
   const sales = await db.select({ method: salesTable.paymentMethod, amount: sql<string>`coalesce(sum(${salesTable.totalAmount}), 0)`, checks: sql<number>`count(*)::int` })

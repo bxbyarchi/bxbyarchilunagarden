@@ -11,8 +11,9 @@ import Markdown from "@/components/Markdown";
 import { errMsg, fmtDayTime } from "@/lib/personnel";
 
 interface ChatRow { id: number; title: string; updatedAt: string }
-interface ChatList { chats: ChatRow[]; used: number; limit: number; configured: boolean }
-interface Msg { id: number; role: "user" | "assistant"; text: string; actions: { report: string; params: Record<string, string | null>; ok: boolean }[] | null; error: string | null; costUsd: number | null; createdAt: string }
+interface ModelInfo { id: string; label: string; tier: "free" | "fast" | "balanced" | "smart"; free: boolean }
+interface ChatList { chats: ChatRow[]; used: number; limit: number; configured: boolean; models: ModelInfo[]; defaultModel: string }
+interface Msg { id: number; role: "user" | "assistant"; text: string; modelLabel: string | null; actions: { report: string; params: Record<string, string | null>; ok: boolean }[] | null; error: string | null; costUsd: number | null; createdAt: string }
 
 const REPORT_RU: Record<string, string> = {
   sales_margin: "продажи и маржа", kassa_summary: "аналитика касс", cash_report: "деньги в кассах", stock_items: "остатки", low_stock: "низкие остатки", stock_movement: "движение товаров",
@@ -35,8 +36,11 @@ export default function Advisor() {
   const qc = useQueryClient();
   const { data: list } = useQuery<ChatList>({ queryKey: ["/api/advisor/chats"], queryFn: () => customFetch("/api/advisor/chats"), enabled: !!user });
   const [chatId, setChatId] = useState<number | null>(null);
-  const { data: chat } = useQuery<{ id: number; title: string; messages: Msg[] }>({ queryKey: ["/api/advisor/chats", chatId], queryFn: () => customFetch(`/api/advisor/chats/${chatId}`), enabled: chatId != null });
+  const { data: chat } = useQuery<{ id: number; title: string; model: string | null; messages: Msg[] }>({ queryKey: ["/api/advisor/chats", chatId], queryFn: () => customFetch(`/api/advisor/chats/${chatId}`), enabled: chatId != null });
   const [text, setText] = useState("");
+  // The model can change between questions — the conversation history stays the same.
+  const [model, setModel] = useState<string>("auto");
+  useEffect(() => { setModel(chat?.model ?? list?.defaultModel ?? "auto"); }, [chat?.id, chat?.model, list?.defaultModel]);
   const [pending, setPending] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [chat?.messages.length, pending]);
@@ -48,7 +52,7 @@ export default function Advisor() {
     try {
       let id = chatId;
       if (id == null) { const c = await customFetch<{ id: number }>("/api/advisor/chats", { method: "POST" }); id = c.id; setChatId(id); }
-      await customFetch(`/api/advisor/chats/${id}/messages`, { method: "POST", body: JSON.stringify({ text: question }) });
+      await customFetch(`/api/advisor/chats/${id}/messages`, { method: "POST", body: JSON.stringify({ text: question, model }) });
       await qc.invalidateQueries({ queryKey: ["/api/advisor/chats"] });
     } catch (e) { toast({ title: "Советник не ответил", description: errMsg(e), variant: "destructive" }); setText(question); }
     finally { setPending(null); }
@@ -105,6 +109,7 @@ export default function Advisor() {
                 <div key={m.id} className="flex">
                   <div className={`max-w-[92%] rounded-2xl rounded-bl-sm border px-4 py-3 text-sm shadow-sm ${m.error ? "border-red-200 bg-red-50" : "bg-card"}`}>
                     {m.error ? <div className="text-red-800"><b>Не получилось ответить:</b> {m.error}</div> : <Markdown text={m.text} />}
+                    {m.modelLabel && !m.error && <div className="mt-1.5 text-[10px] text-muted-foreground">{m.modelLabel}{m.costUsd ? ` · $${m.costUsd.toFixed(3)}` : " · бесплатно"}</div>}
                     {!!m.actions?.length && (
                       <div className="mt-2 flex flex-wrap gap-1 border-t pt-2">
                         {m.actions.map((a, i) => (
@@ -129,7 +134,15 @@ export default function Advisor() {
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
                 <Button className="self-end" onClick={() => send()} disabled={!text.trim() || !!pending} aria-label="Спросить"><Send className="h-4 w-4" /></Button>
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">Советник только смотрит и советует — ничего не меняет в системе. Проверяйте важные цифры в отчётах.</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <span>Модель:</span>
+                <select className="rounded border bg-background px-1.5 py-0.5 text-xs text-foreground" value={model} onChange={(e) => setModel(e.target.value)} disabled={!!pending} aria-label="Модель ИИ">
+                  <option value="auto">Авто (бесплатная, если подключена)</option>
+                  {!!list?.models.some((m) => m.free) && <optgroup label="Бесплатные">{list.models.filter((m) => m.free).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</optgroup>}
+                  {!!list?.models.some((m) => !m.free) && <optgroup label="Claude — платные, сильнее">{list.models.filter((m) => !m.free).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</optgroup>}
+                </select>
+                <span className="hidden sm:inline">· можно менять посреди разговора — история сохраняется · советник только смотрит, ничего не меняет</span>
+              </div>
             </div>
           </section>
         </div>

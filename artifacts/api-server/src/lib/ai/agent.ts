@@ -7,7 +7,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db, aiConversationsTable, aiMessagesTable, aiSettingsTable, guestsTable, type AiConversation, type AiSettings } from "@workspace/db";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { AGENT_TOOLS, runTool, markAttention } from "./tools";
-import { toLocal, costUsd, AGENT_MODELS } from "./helpers";
+import { toLocal, costUsd } from "./helpers";
+import { GUEST_MODELS, DEFAULT_GUEST_MODEL } from "../llm/catalog";
 import { normalizePhone, formatPhone } from "../bookingMath";
 import { logger } from "../logger";
 
@@ -133,7 +134,8 @@ export async function handleGuestMessage(conversationId: number, text: string): 
 }
 
 async function runTurn(conv: AiConversation, settings: AiSettings): Promise<AgentReply> {
-  const model = AGENT_MODELS.includes(settings.model) ? settings.model : "claude-opus-5-5";
+  // Guests always get a strong Claude model (Opus by default); weaker/free models are never used here.
+  const model = GUEST_MODELS.includes(settings.model) ? settings.model : DEFAULT_GUEST_MODEL;
   const actions: Array<{ tool: string; input: unknown; ok: boolean; result: string }> = [];
   let inputTokens = 0, outputTokens = 0;
   const ctx = { conversation: conv, settings, setGuestId: (id: number) => { ctx.conversation = { ...ctx.conversation, guestId: id }; } };
