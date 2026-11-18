@@ -126,7 +126,7 @@
 | Переменная               | Описание                              |
 |--------------------------|---------------------------------------|
 | `TELEGRAM_BOT_TOKEN`     | Токен Telegram-бота (BotFather)       |
-| `TRUST_PROXY`            | `1`, если сервер стоит за HTTPS-прокси (nginx) |
+| `TRUST_PROXY`            | `1`, если сервер стоит за HTTPS-прокси (в docker-compose — Caddy, уже включено) |
 | `DATABASE_URL`           | Строка подключения к PostgreSQL       |
 | `DEFAULT_OBJECT_STORAGE_BUCKET_ID` | ID бакета для фото         |
 
@@ -135,6 +135,8 @@
 ---
 
 ## 🚀 Запуск
+
+**На сервере:** пошаговая инструкция — [`docs/DEPLOY.md`](docs/DEPLOY.md) (VPS, домен, автоматический https, обновления, копии).
 
 Привязок к хостингу нет. При первом запуске откройте систему в браузере и создайте администратора. Локально: скопируйте `.env.example` в `.env`, заполните значения и запустите
 `docker compose up -d --build` (приложение + PostgreSQL) — или `pnpm install && pnpm run build` и

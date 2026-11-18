@@ -12,12 +12,15 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-luna}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-luna}
       DATA_DIR: /data
       BACKUP_DIR: /backups
+      # Behind Caddy (HTTPS): trust its X-Forwarded-* headers so cookies are Secure.
+      TRUST_PROXY: "1"
+      PUBLIC_URL: https://${DOMAIN:-localhost}
     # Check-in photos and other files the server stores itself; backups are read to show their status.
     volumes:
       - app-data:/data
       - ./backups:/backups:ro
-    # Published only on localhost — Nginx on the host is the only thing that
-    # should ever reach this port. Never 0.0.0.0:3000 here.
+    # Published only on localhost (for checks on the server itself); the outside
+    # world reaches the app through Caddy (HTTPS). Never 0.0.0.0:3000 here.
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -64,6 +67,27 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # HTTPS: automatic Let's Encrypt certificate for DOMAIN (see docs/DEPLOY.md).
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   # Nightly pg_dump + server files into ./backups (keeps 14 days). See docs/BACKUP.md.
   backup:
     image: postgres:18-alpine
@@ -92,3 +116,5 @@ services:
 volumes:
   postgres-data:
   app-data:
+  caddy-data:
+  caddy-config:

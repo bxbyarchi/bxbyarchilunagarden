@@ -1,0 +1,10 @@
+# HTTPS in front of the CRM. Caddy gets and renews a free Let's Encrypt certificate for DOMAIN
+# automatically (ports 80 and 443 must be open and DOMAIN must point to this server).
+{$DOMAIN} {
+	encode zstd gzip
+	# Check-in photos and receipts are uploaded as base64 — allow a few MB.
+	request_body {
+		max_size 10MB
+	}
+	reverse_proxy app:3000
+}
