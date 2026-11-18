@@ -9,8 +9,9 @@ import {
   receiptsTable,
   staffTable,
   locationsTable,
+  telegramOutboxTable,
 } from "@workspace/db";
-import { eq, sql, and, lt, lte, gte, ilike, inArray } from "drizzle-orm";
+import { eq, sql, and, lt, lte, gte, ilike, inArray, isNull } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { logger } from "./logger";
 import { logAudit } from "./auditLogger";
@@ -105,7 +106,7 @@ async function startRestockFlow(ctx:Context & {chat:{id:number}}){try{const item
 async function doRestock(ctx:Context & {chat:{id:number}},chatId:number,itemId:number,qty:number,notes:string,role:string){try{const item=await db.query.itemsTable.findFirst({where:eq(itemsTable.id,itemId)});if(!item){await ctx.reply("Товар не найден.");return;}const totalCost=Number(item.pricePerUnit)*qty,comment=notes.trim()==="—"||notes.trim()===""?null:notes.trim();const rsUser=await getUserByChat(chatId);const locationId=await botLocationId(rsUser);await db.transaction(async tx=>{await moveContext(tx,"telegram_receipt",null,rsUser?.clerkUserId);await tx.insert(receiptsTable).values({itemId:item.id,locationId,quantity:String(qty),pricePerUnit:item.pricePerUnit,totalCost:String(totalCost),supplier:comment??"Оприходование через Telegram",notes:comment,recordedByClerkId:rsUser?.clerkUserId??null});await addStock(tx,item.id,locationId,qty);});await logAudit({action:"create",entityType:"receipt",clerkUserId:rsUser?.clerkUserId,details:`Telegram restock: ${item.name} × ${qty}${comment?` (${comment})`:""}`});const[updated]=await db.select({currentStock:itemsTable.currentStock}).from(itemsTable).where(eq(itemsTable.id,item.id));userCtx.set(chatId,{mode:"warehouse"});await ctx.reply(`✅ *Оприходование зафиксировано!*\n\n📦 *${item.name}*\n📥 Принято: *${qty} ${item.unit}*\n📊 Новый остаток: *${Number(updated?.currentStock??0).toFixed(2)} ${item.unit}*\n💰 Сумма: ${fmt(totalCost)} сом${comment?`\n📝 Комментарий: ${comment}`:""}`,{parse_mode:"Markdown",reply_markup:warehouseKeyboard(role)});}catch(err){logger.error({err},"Telegram restock error");await ctx.reply("Ошибка при сохранении. Попробуйте снова.");}}
 async function startRestockForItem(ctx:Context & {chat:{id:number}},itemId:number){const item=await db.query.itemsTable.findFirst({where:eq(itemsTable.id,itemId)});if(!item){await ctx.reply("Товар не найден.");return;}userCtx.set(ctx.chat.id,{mode:"restock_qty",itemId:item.id,itemName:item.name,itemUnit:item.unit});await ctx.reply(`📥 *Оприходование: ${item.name}*\n\nТекущий остаток: *${Number(item.currentStock).toFixed(2)} ${item.unit}*\nЦена: ${fmt(Number(item.pricePerUnit))} сом/${item.unit}\n\nВведите количество:`,{parse_mode:"Markdown"});}
 
-export function initTelegramBot(registerFirst?:(bot:Telegraf)=>void):import("express").RequestHandler|undefined{const token=process.env["TELEGRAM_BOT_TOKEN"];if(!token){logger.info("TELEGRAM_BOT_TOKEN not set — Telegram bot disabled");return undefined;}bot=new Telegraf(token);registerFirst?.(bot);async function handleStart(ctx:Context & {chat:{id:number}}){userCtx.set(ctx.chat.id,{mode:"main"});const user=await requireAuth(ctx);if(!user)return;await sendMainMenu(ctx,user);}bot.start(handleStart);bot.command("menu",handleStart);bot.command("myid",async ctx=>{await ctx.reply(`🪪 Ваш Chat ID: \`${ctx.chat.id}\``,{parse_mode:"Markdown"})});bot.command("cancel",async ctx=>{userCtx.delete(ctx.chat.id);const user=await getUserByChat(ctx.chat.id);if(user){userCtx.set(ctx.chat.id,{mode:"main"});await ctx.reply("✅ Операция отменена.",{reply_markup:mainKeyboard(user.role)});}else await ctx.reply("Операция отменена. Введите /start для начала.");});bot.command("logout",async ctx=>{const chatId=ctx.chat.id;try{const user=await getUserByChat(chatId);if(!user){await ctx.reply("Вы и так не авторизованы. Отправьте /start для входа.",{reply_markup:{remove_keyboard:true}});return;}await db.update(usersTable).set({telegramChatId:null}).where(eq(usersTable.id,user.id));userCtx.delete(chatId);await ctx.reply(`👋 Вы вышли из аккаунта *${user.firstName??user.email}*.\n\nДля повторного входа отправьте /start и введите логин и пароль.`,{parse_mode:"Markdown",reply_markup:{remove_keyboard:true}});}catch(err){logger.error({err},"Telegram logout error");await ctx.reply("Ошибка при выходе. Попробуйте снова.");}});
+export function initTelegramBot(registerFirst?:(bot:Telegraf)=>void):import("express").RequestHandler|undefined{const token=process.env["TELEGRAM_BOT_TOKEN"];if(!token){logger.info("TELEGRAM_BOT_TOKEN not set — Telegram bot disabled");return undefined;}bot=new Telegraf(token,process.env["TELEGRAM_API_ROOT"]?{telegram:{apiRoot:process.env["TELEGRAM_API_ROOT"]}}:{});registerFirst?.(bot);async function handleStart(ctx:Context & {chat:{id:number}}){userCtx.set(ctx.chat.id,{mode:"main"});const user=await requireAuth(ctx);if(!user)return;await sendMainMenu(ctx,user);}bot.start(handleStart);bot.command("menu",handleStart);bot.command("myid",async ctx=>{await ctx.reply(`🪪 Ваш Chat ID: \`${ctx.chat.id}\``,{parse_mode:"Markdown"})});bot.command("cancel",async ctx=>{userCtx.delete(ctx.chat.id);const user=await getUserByChat(ctx.chat.id);if(user){userCtx.set(ctx.chat.id,{mode:"main"});await ctx.reply("✅ Операция отменена.",{reply_markup:mainKeyboard(user.role)});}else await ctx.reply("Операция отменена. Введите /start для начала.");});bot.command("logout",async ctx=>{const chatId=ctx.chat.id;try{const user=await getUserByChat(chatId);if(!user){await ctx.reply("Вы и так не авторизованы. Отправьте /start для входа.",{reply_markup:{remove_keyboard:true}});return;}await db.update(usersTable).set({telegramChatId:null}).where(eq(usersTable.id,user.id));userCtx.delete(chatId);await ctx.reply(`👋 Вы вышли из аккаунта *${user.firstName??user.email}*.\n\nДля повторного входа отправьте /start и введите логин и пароль.`,{parse_mode:"Markdown",reply_markup:{remove_keyboard:true}});}catch(err){logger.error({err},"Telegram logout error");await ctx.reply("Ошибка при выходе. Попробуйте снова.");}});
 bot.action(/^rep_fmt_(.+)$/,async ctx=>{await ctx.answerCbQuery();const raw=ctx.match[1],id=raw==="all"?undefined:Number(raw);let name="Все категории";if(id){const c=await db.query.categoriesTable.findFirst({where:eq(categoriesTable.id,id)});name=c?.name??name;}await ctx.reply(`📊 *${name}* — выберите формат:`,{parse_mode:"Markdown",reply_markup:{inline_keyboard:[[{text:"📊 Excel файл",callback_data:`rep_xlsx_${raw}`},{text:"📄 Текстовый",callback_data:`rep_txt_${raw}`}]]}});});
 bot.action(/^rep_xlsx_(.+)$/,async ctx=>{await ctx.answerCbQuery("Генерирую Excel…");const raw=ctx.match[1],id=raw==="all"?undefined:Number(raw);let name="all";if(id){const c=await db.query.categoriesTable.findFirst({where:eq(categoriesTable.id,id)});name=c?.name??name;}try{await ctx.reply("⏳ Генерирую отчёт, подождите...");const buf=await generateReportXlsx(id);const now=new Date();await ctx.replyWithDocument({source:buf,filename:`lunagarden-${name.replace(/\s+/g,"_")}-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}.xlsx`},{caption:`📊 Отчёт за ${now.toLocaleString("ru-RU",{month:"long",year:"numeric"})}${id?` — ${name}`:""}`});}catch(err){logger.error({err},"rep_xlsx error");await ctx.reply("Ошибка при генерации. Попробуйте позже.");}});
 bot.action(/^rep_txt_(.+)$/,async ctx=>{await ctx.answerCbQuery("Формирую отчёт…");const raw=ctx.match[1],id=raw==="all"?undefined:Number(raw);try{await sendTextReport(ctx,id);}catch(err){logger.error({err},"rep_txt error");await ctx.reply("Ошибка при формировании.");}});
@@ -132,7 +133,7 @@ export async function notifyStaff(text: string, roles: string[] = ["super_admin"
     const staff = await db.select({ chatId: usersTable.telegramChatId }).from(usersTable).where(inArray(usersTable.role, roles));
     for (const s of staff) {
       if (!s.chatId) continue;
-      try { await bot.telegram.sendMessage(Number(s.chatId), text); sent++; } catch (err) { logger.warn({ err }, "notifyStaff: send failed"); }
+      if (await deliver(s.chatId, text)) sent++;
     }
   } catch (err) { logger.error({ err }, "notifyStaff error"); }
   return sent;
@@ -147,8 +148,64 @@ export async function notifyUsers(clerkIds: (string | null | undefined)[], text:
     const rows = await db.select({ chatId: usersTable.telegramChatId }).from(usersTable).where(inArray(usersTable.clerkUserId, ids));
     for (const r of rows) {
       if (!r.chatId) continue;
-      try { await bot.telegram.sendMessage(Number(r.chatId), text); sent++; } catch (err) { logger.warn({ err }, "notifyUsers: send failed"); }
+      if (await deliver(r.chatId, text)) sent++;
     }
   } catch (err) { logger.error({ err }, "notifyUsers error"); }
   return sent;
+}
+
+// ─── Delivery with an outbox: no internet → the message waits instead of being lost ───────────
+
+/** Telegram answered with an error (blocked bot, chat not found…) — retrying will not help. */
+function isTelegramRefusal(err: unknown): boolean {
+  return typeof (err as { response?: { error_code?: number } })?.response?.error_code === "number";
+}
+export function outboxDelayMs(attempts: number): number {
+  return Math.min(60_000 * 2 ** attempts, 30 * 60_000);
+}
+const OUTBOX_TTL_MS = 48 * 3600_000;
+
+/** Send now; on a network failure park it in the outbox. Returns true when delivered right away. */
+export async function deliver(chatId: string, text: string): Promise<boolean> {
+  if (!bot) return false;
+  try { await bot.telegram.sendMessage(Number(chatId), text); return true; }
+  catch (err) {
+    if (isTelegramRefusal(err)) { logger.warn({ err, chatId }, "telegram refused message"); return false; }
+    logger.warn({ err: (err as Error)?.message, chatId }, "telegram unreachable — message queued");
+    try { await db.insert(telegramOutboxTable).values({ chatId, text, attempts: 1, nextAttemptAt: new Date(Date.now() + outboxDelayMs(0)), lastError: String((err as Error)?.message ?? err).slice(0, 300) }); }
+    catch (e) { logger.error({ err: e }, "telegram outbox insert failed"); }
+    return false;
+  }
+}
+
+/** Retry queued messages, oldest first; drop those older than 48 h. */
+export async function flushTelegramOutbox(now = new Date()): Promise<{ sent: number; failed: number }> {
+  if (!bot) return { sent: 0, failed: 0 };
+  const due = await db.select().from(telegramOutboxTable)
+    .where(and(isNull(telegramOutboxTable.sentAt), lte(telegramOutboxTable.nextAttemptAt, now), gte(telegramOutboxTable.createdAt, new Date(now.getTime() - OUTBOX_TTL_MS))))
+    .orderBy(telegramOutboxTable.createdAt).limit(50);
+  let sent = 0, failed = 0;
+  for (const m of due) {
+    try {
+      await bot.telegram.sendMessage(Number(m.chatId), `${m.text}\n\n(отправлено с задержкой: не было связи с ${m.createdAt.toLocaleTimeString("ru-RU", { timeZone: "Asia/Bishkek", hour: "2-digit", minute: "2-digit" })})`);
+      await db.update(telegramOutboxTable).set({ sentAt: now }).where(eq(telegramOutboxTable.id, m.id)); sent++;
+    } catch (err) {
+      failed++;
+      const refused = isTelegramRefusal(err);
+      await db.update(telegramOutboxTable).set({
+        attempts: m.attempts + 1, lastError: String((err as Error)?.message ?? err).slice(0, 300),
+        // A refusal will not change — park it far away; a network error is retried with backoff.
+        nextAttemptAt: new Date(now.getTime() + (refused ? OUTBOX_TTL_MS * 2 : outboxDelayMs(m.attempts))),
+      }).where(eq(telegramOutboxTable.id, m.id));
+      if (!refused) break; // still offline — no point hammering the rest
+    }
+  }
+  return { sent, failed };
+}
+
+let outboxTimer: NodeJS.Timeout | null = null;
+export function startTelegramOutbox() {
+  if (outboxTimer || !bot) return;
+  outboxTimer = setInterval(() => { flushTelegramOutbox().catch((err) => logger.error({ err }, "telegram outbox flush failed")); }, 60_000);
+  outboxTimer.unref();
 }

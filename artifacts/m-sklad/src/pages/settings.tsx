@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import BackupsCard from "@/components/BackupsCard";
+import { HardDrive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -332,8 +334,8 @@ function TelegramSection() {
 export default function Settings() {
   const { canManageUsers, isSuperAdmin } = useCurrentUser();
   return <div className="space-y-6 max-w-4xl"><div><h1 className="text-2xl font-bold tracking-tight">Настройки</h1><p className="text-muted-foreground text-sm">Управление профилем, организацией и доступом.</p></div>
-    <Tabs defaultValue="profile"><TabsList className="grid grid-cols-5 w-full"><TabsTrigger value="profile" className="gap-2 text-xs sm:text-sm"><User className="h-4 w-4" /><span className="hidden sm:inline">Профиль</span></TabsTrigger><TabsTrigger value="org" className="gap-2 text-xs sm:text-sm"><Building2 className="h-4 w-4" /><span className="hidden sm:inline">Организация</span></TabsTrigger><TabsTrigger value="access" className="gap-2 text-xs sm:text-sm" disabled={!canManageUsers}><Shield className="h-4 w-4" /><span className="hidden sm:inline">Доступ</span></TabsTrigger><TabsTrigger value="telegram" className="gap-2 text-xs sm:text-sm"><MessageCircle className="h-4 w-4" /><span className="hidden sm:inline">Telegram</span></TabsTrigger><TabsTrigger value="demo" className="gap-2 text-xs sm:text-sm" disabled={!isSuperAdmin}><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">Демо-данные</span></TabsTrigger></TabsList>
-      <div className="mt-6"><TabsContent value="profile"><ProfileSection /></TabsContent><TabsContent value="org"><OrgSection /></TabsContent><TabsContent value="access"><AccessSection /></TabsContent><TabsContent value="telegram"><TelegramSection /></TabsContent><TabsContent value="demo"><DemoDataSection /></TabsContent></div>
+    <Tabs defaultValue="profile"><TabsList className="grid grid-cols-6 w-full"><TabsTrigger value="profile" className="gap-2 text-xs sm:text-sm"><User className="h-4 w-4" /><span className="hidden sm:inline">Профиль</span></TabsTrigger><TabsTrigger value="org" className="gap-2 text-xs sm:text-sm"><Building2 className="h-4 w-4" /><span className="hidden sm:inline">Организация</span></TabsTrigger><TabsTrigger value="access" className="gap-2 text-xs sm:text-sm" disabled={!canManageUsers}><Shield className="h-4 w-4" /><span className="hidden sm:inline">Доступ</span></TabsTrigger><TabsTrigger value="telegram" className="gap-2 text-xs sm:text-sm"><MessageCircle className="h-4 w-4" /><span className="hidden sm:inline">Telegram</span></TabsTrigger><TabsTrigger value="demo" className="gap-2 text-xs sm:text-sm" disabled={!isSuperAdmin}><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">Демо-данные</span></TabsTrigger><TabsTrigger value="backups" className="gap-2 text-xs sm:text-sm" disabled={!isSuperAdmin}><HardDrive className="h-4 w-4" /><span className="hidden sm:inline">Копии</span></TabsTrigger></TabsList>
+      <div className="mt-6"><TabsContent value="profile"><ProfileSection /></TabsContent><TabsContent value="org"><OrgSection /></TabsContent><TabsContent value="access"><AccessSection /></TabsContent><TabsContent value="telegram"><TelegramSection /></TabsContent><TabsContent value="backups" className="mt-6"><BackupsCard /></TabsContent><TabsContent value="demo"><DemoDataSection /></TabsContent></div>
     </Tabs>
   </div>;
 }

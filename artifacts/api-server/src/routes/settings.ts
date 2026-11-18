@@ -1,3 +1,4 @@
+import { backupStatus } from "../lib/backups";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/requireAuth";
 import { db } from "@workspace/db";
@@ -225,6 +226,12 @@ router.get("/admin/telegram/status", requireAuth(), async (_req: Request, res: R
   const botConnected = !!process.env["TELEGRAM_BOT_TOKEN"];
   const adminChatConfigured = !!process.env["TELEGRAM_ADMIN_CHAT_ID"];
   res.json({ botConnected, adminChatConfigured });
+});
+
+router.get("/admin/backups", requireAuth(), async (req: Request, res: Response) => {
+  const u = await db.query.usersTable.findFirst({ where: eq(usersTable.clerkUserId, req.auth!.userId!) });
+  if (u?.role !== "super_admin") { res.status(403).json({ error: "Только для владельца" }); return; }
+  res.json(await backupStatus());
 });
 
 export default router;

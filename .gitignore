@@ -69,3 +69,4 @@ project_part_*
 # Local server data (check-in photos etc.)
 /data
 artifacts/api-server/data
+/backups

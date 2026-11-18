@@ -29,3 +29,18 @@ export const usersTable = pgTable("users", {
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true, passwordHash: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;
+
+/**
+ * Telegram messages that could not be sent (no internet, Telegram down). A worker retries them,
+ * so notifications are delayed rather than lost while the restaurant is offline.
+ */
+export const telegramOutboxTable = pgTable("telegram_outbox", {
+  id: serial("id").primaryKey(),
+  chatId: text("chat_id").notNull(),
+  text: text("text").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lastError: text("last_error"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

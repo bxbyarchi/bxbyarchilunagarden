@@ -11,9 +11,11 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-luna}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-luna}
       DATA_DIR: /data
-    # Check-in photos and other files the server stores itself.
+      BACKUP_DIR: /backups
+    # Check-in photos and other files the server stores itself; backups are read to show their status.
     volumes:
       - app-data:/data
+      - ./backups:/backups:ro
     # Published only on localhost — Nginx on the host is the only thing that
     # should ever reach this port. Never 0.0.0.0:3000 here.
     ports:
@@ -61,6 +63,31 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Nightly pg_dump + server files into ./backups (keeps 14 days). See docs/BACKUP.md.
+  backup:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-luna}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-luna}
+      KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR: ${BACKUP_HOUR:-4}
+    volumes:
+      - ./backups:/backups
+      - app-data:/data:ro
+      - ./deploy/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
 
 volumes:
   postgres-data:
