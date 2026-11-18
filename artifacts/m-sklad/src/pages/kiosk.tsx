@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { Delete, LogIn, LogOut, CameraOff, ArrowLeft, AlertTriangle, ScanFace, UserCheck } from "lucide-react";
-import { detectFace, loadFaceApi } from "@/lib/face";
+import { scanFace, loadFaceApi } from "@/lib/face";
+import FaceScanOverlay, { type ScanMode, type ScanTarget } from "@/components/FaceScanOverlay";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import AccessDenied from "@/components/AccessDenied";
 import { PERSONNEL_ADMIN, errMsg, fmtMin, fmtTime } from "@/lib/personnel";
@@ -25,8 +26,8 @@ export default function Kiosk() {
   const [now, setNow] = useState(new Date());
   // Face recognition: on when at least one employee has a registered face.
   const [faceMode, setFaceMode] = useState<"off" | "loading" | "on">("off");
-  const [faceMatch, setFaceMatch] = useState<{ staffName: string; action: "in" | "out"; descriptor: number[] } | null>(null);
-  const [faceHint, setFaceHint] = useState<string | null>(null);
+  const [faceMatch, setFaceMatch] = useState<{ staffName: string; action: "in" | "out"; descriptor: number[]; percent: number | null } | null>(null);
+  const [scan, setScan] = useState<{ mode: ScanMode; target: ScanTarget | null }>({ mode: "search", target: null });
   const faceAuth = useRef<number[] | null>(null);
   const cooldown = useRef(0);
 
@@ -49,25 +50,34 @@ export default function Kiosk() {
     }).catch(() => {});
     return () => { alive = false; };
   }, [camera]);
-  // Look for a face while the kiosk is idle; the person then confirms "it's me".
+  // Scan continuously while idle: the overlay follows the face; once it is close and clear we ask
+  // the server who it is, and the person confirms "it's me".
   useEffect(() => {
     if (faceMode !== "on" || result || error || faceMatch || busy || pin) return;
     let alive = true;
+    let asking = false;
     (async () => {
       while (alive) {
-        await new Promise((r) => setTimeout(r, 600));
-        if (!alive || Date.now() < cooldown.current || !video.current) continue;
-        let shot;
-        try { shot = await detectFace(video.current); } catch { continue; }
+        await new Promise((r) => setTimeout(r, 90));
+        if (!alive || !video.current) continue;
+        let r;
+        try { r = await scanFace(video.current); } catch { continue; }
         if (!alive) return;
-        if (shot === "many") { setFaceHint("Подходите по одному"); continue; }
-        if (!shot) { setFaceHint(null); continue; }
+        if (r === null) { setScan({ mode: "search", target: null }); continue; }
+        if (r === "many") { setScan((x) => ({ mode: "many", target: x.target })); continue; }
+        const { shot, close } = r;
+        const cooling = Date.now() < cooldown.current;
+        setScan({ mode: !close ? "far" : cooling ? "unknown" : "track", target: shot });
+        if (!close || cooling || asking) continue;
+        asking = true;
         try {
-          const r = await customFetch<{ found: boolean; reason?: string; staffName?: string; action?: "in" | "out" }>("/api/personnel/kiosk/identify", { method: "POST", body: JSON.stringify({ descriptor: shot.descriptor }) });
+          const res = await customFetch<{ found: boolean; reason?: string; staffName?: string; action?: "in" | "out"; percent?: number }>("/api/personnel/kiosk/identify", { method: "POST", body: JSON.stringify({ descriptor: shot.descriptor }) });
           if (!alive) return;
-          if (r.found) { setFaceMatch({ staffName: r.staffName!, action: r.action!, descriptor: shot.descriptor }); setFaceHint(null); return; }
-          setFaceHint("Не узнаю вас — введите PIN"); cooldown.current = Date.now() + 3000;
+          if (res.found) { setScan({ mode: "match", target: shot }); setFaceMatch({ staffName: res.staffName!, action: res.action!, descriptor: shot.descriptor, percent: res.percent ?? null }); return; }
+          cooldown.current = Date.now() + 3000;
+          setScan({ mode: "unknown", target: shot });
         } catch { cooldown.current = Date.now() + 3000; }
+        finally { asking = false; }
       }
     })();
     return () => { alive = false; };
@@ -140,9 +150,10 @@ export default function Kiosk() {
           {camera !== "on" && <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-sidebar-foreground/70">
             <CameraOff className="h-8 w-8" />{camera === "wait" ? "Включаем камеру…" : "Камера недоступна — отметка без фото. Разрешите камеру в браузере (нужен адрес https или localhost)."}
           </div>}
-          {camera === "on" && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 p-3 text-center text-sm text-white">
-            {faceMode === "on" ? <span className="inline-flex items-center gap-1.5"><ScanFace className="h-4 w-4" />{faceHint ?? "Подойдите ближе — система узнает вас. Или введите PIN"}</span>
-              : faceMode === "loading" ? "Включаем распознавание лица…" : "Смотрите в камеру — фото сделается при вводе PIN"}</div>}
+          {camera === "on" && faceMode === "on" && <FaceScanOverlay video={video} mode={result ? "idle" : faceMatch ? "match" : scan.mode} target={scan.target}
+            label={faceMatch?.staffName ?? null} percent={faceMatch?.percent ?? null} title="FACE ID · LUNA GARDEN" />}
+          {camera === "on" && faceMode !== "on" && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 p-3 text-center text-sm text-white">
+            {faceMode === "loading" ? <span className="inline-flex items-center gap-1.5"><ScanFace className="h-4 w-4 animate-pulse" />Включаем распознавание лица…</span> : "Смотрите в камеру — фото сделается при вводе PIN"}</div>}
         </div>
 
         <div className="mx-auto w-full max-w-sm">
@@ -152,7 +163,7 @@ export default function Kiosk() {
               <div className="mt-3 text-2xl font-semibold">{faceMatch.staffName}</div>
               <p className="mt-1 text-lg">{faceMatch.action === "in" ? "Отметить приход?" : "Отметить уход?"}</p>
               <div className="mt-5 grid grid-cols-2 gap-2">
-                <button type="button" className="h-14 rounded-xl border text-lg font-medium" onClick={() => { setFaceMatch(null); cooldown.current = Date.now() + 5000; setFaceHint("Введите свой PIN"); }}>Это не я</button>
+                <button type="button" className="h-14 rounded-xl border text-lg font-medium" onClick={() => { setFaceMatch(null); cooldown.current = Date.now() + 5000; setScan({ mode: "unknown", target: null }); }}>Это не я</button>
                 <button type="button" disabled={busy} className="h-14 rounded-xl bg-primary text-lg font-medium text-primary-foreground" onClick={() => submit(false, faceMatch.descriptor)}>Да, это я</button>
               </div>
             </div>

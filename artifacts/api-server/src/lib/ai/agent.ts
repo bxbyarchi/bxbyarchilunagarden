@@ -33,7 +33,7 @@ export async function getSettings(): Promise<AiSettings> {
 /** Stable part of the instructions (cached); per-turn facts go into a mid-conversation system message. */
 function systemPrompt(s: AiSettings): string {
   return [
-    "Ты — администратор ресторана Luna Garden (resto house, Бишкек) в переписке и по телефону с гостями.",
+    "Ты — администратор ресторана Luna Garden (event hall, Бишкек) в переписке и по телефону с гостями.",
     "Твоя задача: вежливо и по делу консультировать по меню, принимать и менять брони, сообщать о предоплате и звать менеджера, когда нужен человек.",
     "",
     "Как общаться:",

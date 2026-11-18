@@ -13,8 +13,43 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="manifest" href="/manifest.json" />
+    <style>
+      /* Brand splash: shown by the browser before any JS runs, then faded out by the app. */
+      #lg-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+        background:radial-gradient(120% 90% at 50% 35%,#9a2a2c 0%,#831F21 45%,#4e1012 100%);color:#fff;font-family:Montserrat,system-ui,sans-serif;transition:opacity .5s ease,visibility .5s}
+      #lg-splash.lg-hide{opacity:0;visibility:hidden}
+      .lg-moon{position:relative;width:120px;height:120px}
+      .lg-moon__disc{position:absolute;inset:18px;border-radius:50%;box-shadow:inset 18px -8px 0 0 #f6e7c8;filter:drop-shadow(0 0 18px rgba(246,231,200,.55));animation:lg-glow 2.6s ease-in-out infinite}
+      .lg-moon__orbit{position:absolute;inset:0;border-radius:50%;border:1px dashed rgba(255,255,255,.18);animation:lg-spin 9s linear infinite}
+      .lg-moon__orbit i{position:absolute;width:6px;height:6px;border-radius:50%;background:#f6e7c8;box-shadow:0 0 10px 2px rgba(246,231,200,.8)}
+      .lg-moon__orbit i:nth-child(1){top:-3px;left:calc(50% - 3px)}
+      .lg-moon__orbit i:nth-child(2){bottom:14px;left:6px;width:4px;height:4px;opacity:.7}
+      .lg-moon__orbit i:nth-child(3){top:30px;right:-2px;width:3px;height:3px;opacity:.6}
+      .lg-logo{height:48px;opacity:0;animation:lg-up .8s .15s ease forwards}
+      .lg-bar{width:180px;height:3px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden}
+      .lg-bar i{display:block;height:100%;width:40%;border-radius:3px;background:linear-gradient(90deg,transparent,#f6e7c8,transparent);animation:lg-run 1.3s ease-in-out infinite}
+      .lg-text{font-size:13px;letter-spacing:.08em;color:rgba(255,255,255,.7);min-height:18px}
+      @keyframes lg-spin{to{transform:rotate(360deg)}}
+      @keyframes lg-glow{50%{filter:drop-shadow(0 0 30px rgba(246,231,200,.85))}}
+      @keyframes lg-run{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
+      @keyframes lg-up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+      @media (prefers-reduced-motion:reduce){#lg-splash *{animation:none!important}.lg-logo{opacity:1}}
+    </style>
   </head>
   <body>
+    <div id="lg-splash" role="status" aria-label="Загрузка">
+      <div class="lg-moon"><div class="lg-moon__orbit"><i></i><i></i><i></i></div><div class="lg-moon__disc"></div></div>
+      <img class="lg-logo" src="/brand/logo-horizontal-white.svg" alt="Luna Garden" />
+      <div class="lg-bar"><i></i></div>
+      <div class="lg-text" id="lg-splash-text">Открываем ресторан…</div>
+    </div>
+    <script>
+      (function () {
+        var t = ["Открываем ресторан…", "Накрываем столы…", "Проверяем склад…", "Разогреваем кухню…", "Включаем кассу…"], i = 0;
+        window.__lgSplashTimer = setInterval(function () { var el = document.getElementById("lg-splash-text"); if (el) el.textContent = t[++i % t.length]; }, 1100);
+        window.__lgSplashStart = Date.now();
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

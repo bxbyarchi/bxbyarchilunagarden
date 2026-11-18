@@ -255,7 +255,9 @@ router.post("/personnel/kiosk/identify", ...route(KIOSK, async (req, res) => {
   if (m.staffId == null) { res.json({ found: false, reason: m.reason }); return; }
   const [s] = await db.select({ name: staffTable.name }).from(staffTable).where(eq(staffTable.id, m.staffId));
   const [open] = await db.select({ id: attendanceTable.id }).from(attendanceTable).where(and(eq(attendanceTable.staffId, m.staffId), isNull(attendanceTable.checkOutAt)));
-  res.json({ found: true, staffName: s.name, action: open ? "out" : "in" });
+  // Shown on the kiosk as "similarity": 0.0 → 100 %, the 0.5 threshold → ~83 %.
+  const percent = Math.max(0, Math.min(99, Math.round(100 * (1 - (m.distance / 1.2) ** 2))));
+  res.json({ found: true, staffName: s.name, action: open ? "out" : "in", percent });
 }));
 
 // ─── Kiosk: check in / out by face or PIN, with a photo ─────────────────────

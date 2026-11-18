@@ -41,6 +41,7 @@ import Bookings from "@/pages/bookings";
 import Guests, { GuestCard } from "@/pages/guests";
 import AiAgent from "@/pages/ai-agent";
 import { AppLayout } from "@/components/layout";
+import BrandLoader, { useHideSplash } from "@/components/BrandLoader";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { AppRole } from "@/hooks/useCurrentUser";
 import { useAuthState } from "@/hooks/useAuthState";
@@ -48,7 +49,7 @@ import { useAuthState } from "@/hooks/useAuthState";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function Spinner() {
-  return <div className="min-h-[100dvh] flex items-center justify-center bg-background"><div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" /></div>;
+  return <BrandLoader />;
 }
 
 /** Signed-out visitors go to /setup on a fresh install, otherwise to /login. */
@@ -161,10 +162,18 @@ function Routes() {
   );
 }
 
+/** Hides the HTML splash once the session check is done (the app then shows its own screens). */
+function SplashGate() {
+  const { isLoading } = useAuthState();
+  useHideSplash(!isLoading);
+  return null;
+}
+
 function App() {
   return (
     <TooltipProvider>
       <QueryClientProvider client={queryClient}>
+        <SplashGate />
         <WouterRouter base={basePath}>
           <Routes />
         </WouterRouter>
