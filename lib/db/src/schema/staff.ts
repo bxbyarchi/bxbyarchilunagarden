@@ -36,6 +36,8 @@ export const staffSchedulesTable = pgTable("staff_schedules", {
   startTime: text("start_time").notNull(),
   endTime: text("end_time").notNull(),
   note: text("note"),
+  // Telegram "did not show up" alert already sent for this shift.
+  noShowNotifiedAt: timestamp("no_show_notified_at", { withTimezone: true }),
   createdByClerkId: text("created_by_clerk_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
@@ -52,6 +54,8 @@ export const attendanceTable = pgTable("attendance", {
   checkOutPhoto: text("check_out_photo"),
   // kiosk | manual
   method: text("method").notNull().default("kiosk"),
+  // "You forgot to check out" reminder already sent.
+  checkoutRemindedAt: timestamp("checkout_reminded_at", { withTimezone: true }),
   note: text("note"),
   editedByClerkId: text("edited_by_clerk_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
