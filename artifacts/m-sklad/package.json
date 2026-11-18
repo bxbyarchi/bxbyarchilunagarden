@@ -72,5 +72,8 @@
     "vite": "catalog:",
     "wouter": "^3.13.0",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@vladmandic/face-api": "1.7.15"
   }
 }

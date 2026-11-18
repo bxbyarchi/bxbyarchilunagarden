@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, KeyRound, Search, CircleDot } from "lucide-react";
+import { Plus, Edit, KeyRound, Search, CircleDot, ScanFace } from "lucide-react";
+import FaceEnroll from "@/components/FaceEnroll";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import AccessDenied from "@/components/AccessDenied";
@@ -19,7 +20,7 @@ import { DEPARTMENTS, PERSONNEL_ADMIN, PERSONNEL_VIEW, errMsg, fmtTime } from "@
 
 export interface StaffRow {
   id: number; name: string; position: string | null; phone: string | null; isActive: boolean; locationId: number | null; locationName: string | null;
-  department: string | null; userClerkId: string | null; hourlyRate: number | null; shiftRate: number | null; hasPin: boolean;
+  department: string | null; userClerkId: string | null; hourlyRate: number | null; shiftRate: number | null; hasPin: boolean; faceSamples: number;
   hireDate: string | null; notes: string | null; photoConsentAt: string | null; accountName: string | null; accountLogin: string | null; openSince: string | null;
 }
 interface Account { clerkUserId: string; login: string; firstName: string | null; lastName: string | null; role: string }
@@ -41,6 +42,7 @@ export default function Staff() {
   const [editing, setEditing] = useState<StaffRow | "new" | null>(null);
   const [f, setF] = useState<Form>(empty);
   const [saving, setSaving] = useState(false);
+  const [faceFor, setFaceFor] = useState<StaffRow | null>(null);
 
   const rows = useMemo(() => (staff ?? []).filter((s) => (showInactive || s.isActive) && (dept === "all" || s.department === dept)
     && (!q || `${s.name} ${s.position ?? ""} ${s.phone ?? ""}`.toLowerCase().includes(q.toLowerCase()))), [staff, q, dept, showInactive]);
@@ -105,7 +107,8 @@ export default function Staff() {
                   <TableCell>{s.department ? DEPARTMENTS[s.department] : "—"}</TableCell>
                   <TableCell className="text-sm">{[s.hourlyRate != null && `${s.hourlyRate} сом/ч`, s.shiftRate != null && `${s.shiftRate} сом/смена`].filter(Boolean).join(", ") || <span className="text-muted-foreground">не задана</span>}</TableCell>
                   <TableCell>{s.hasPin ? <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700"><KeyRound className="mr-1 h-3 w-3" />PIN есть</Badge> : <span className="text-xs text-muted-foreground">нет PIN</span>}
-                    {s.hasPin && !s.photoConsentAt && <div className="mt-1 text-xs text-amber-700">нет согласия на фото</div>}</TableCell>
+                    {s.faceSamples > 0 && <Badge variant="outline" className="ml-1 border-sky-200 bg-sky-50 text-sky-800"><ScanFace className="mr-1 h-3 w-3" />лицо</Badge>}
+                    {(s.hasPin || s.faceSamples > 0) && !s.photoConsentAt && <div className="mt-1 text-xs text-amber-700">нет согласия на фото</div>}</TableCell>
                   <TableCell className="text-sm">{s.accountLogin ? <>{s.accountName ?? s.accountLogin}<div className="text-xs text-muted-foreground">{s.accountLogin}</div></> : <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>{!s.isActive ? <span className="text-xs text-muted-foreground">уволен</span> : s.openSince ? <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><CircleDot className="h-3.5 w-3.5" />на смене с {fmtTime(s.openSince)}</span> : <span className="text-xs text-muted-foreground">не на смене</span>}</TableCell>
                   {isAdmin && <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => open(s)} aria-label="Изменить"><Edit className="h-4 w-4" /></Button></TableCell>}
@@ -141,12 +144,22 @@ export default function Staff() {
                 {editing !== "new" && editing?.hasPin && <Button type="button" variant="ghost" size="sm" onClick={removePin}>Удалить PIN</Button>}
               </div>
               <label className="mt-2 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5" checked={f.photoConsent} onChange={(e) => set("photoConsent", e.target.checked)} />
-                <span>Сотрудник подписал согласие на фотографирование при отметке прихода и ухода{editing !== "new" && editing?.photoConsentAt ? ` (отмечено ${new Date(editing.photoConsentAt).toLocaleDateString("ru-RU")})` : ""}</span></label>
+                <span>Сотрудник подписал согласие на фотографирование и распознавание лица при отметке прихода и ухода{editing !== "new" && editing?.photoConsentAt ? ` (отмечено ${new Date(editing.photoConsentAt).toLocaleDateString("ru-RU")})` : ""}</span></label>
             </div>
+            {editing !== "new" && editing && <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm sm:col-span-2">
+              <ScanFace className="h-4 w-4" /><span className="flex-1">{editing.faceSamples ? `Лицо зарегистрировано (${editing.faceSamples} снимков) — киоск узнаёт без PIN` : "Лицо не зарегистрировано — отметка по PIN"}</span>
+              {editing.photoConsentAt ? <Button type="button" size="sm" variant="outline" onClick={() => setFaceFor(editing)}>{editing.faceSamples ? "Перезаписать лицо" : "Зарегистрировать лицо"}</Button> : <span className="text-xs text-amber-700">нужно согласие (галочка выше, затем сохранить)</span>}
+              {editing.faceSamples > 0 && <Button type="button" size="sm" variant="ghost" onClick={async () => { if (!confirm("Удалить данные лица?")) return; await customFetch(`/api/personnel/staff/${editing.id}/faces`, { method: "DELETE" }); await qc.invalidateQueries({ queryKey: ["/api/personnel/staff"] }); setEditing({ ...editing, faceSamples: 0 }); }}>Удалить</Button>}
+            </div>}
             <div className="space-y-1.5 sm:col-span-2"><Label>Заметки</Label><Textarea rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Медкнижка до…, размер формы…" /></div>
             {editing !== "new" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!f.isActive} onChange={(e) => set("isActive", !e.target.checked)} />Уволен (скрыть из графика и киоска)</label>}
           </div>
           <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setEditing(null)}>Отмена</Button><Button onClick={save} disabled={saving || !f.name.trim()}>{saving ? "…" : "Сохранить"}</Button></div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!faceFor} onOpenChange={(o) => !o && setFaceFor(null)}>
+        <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Регистрация лица</DialogTitle></DialogHeader>
+          {faceFor && <FaceEnroll staffId={faceFor.id} name={faceFor.name} onDone={async (ok) => { const id = faceFor.id; setFaceFor(null); if (ok) { await qc.invalidateQueries({ queryKey: ["/api/personnel/staff"] }); const fresh = qc.getQueryData<StaffRow[]>(["/api/personnel/staff"])?.find((x) => x.id === id); if (fresh && editing !== "new" && editing?.id === id) setEditing(fresh); } }} />}
         </DialogContent>
       </Dialog>
     </div>

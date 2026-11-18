@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
-import { Delete, LogIn, LogOut, CameraOff, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Delete, LogIn, LogOut, CameraOff, ArrowLeft, AlertTriangle, ScanFace, UserCheck } from "lucide-react";
+import { detectFace, loadFaceApi } from "@/lib/face";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import AccessDenied from "@/components/AccessDenied";
 import { PERSONNEL_ADMIN, errMsg, fmtMin, fmtTime } from "@/lib/personnel";
@@ -22,6 +23,12 @@ export default function Kiosk() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
+  // Face recognition: on when at least one employee has a registered face.
+  const [faceMode, setFaceMode] = useState<"off" | "loading" | "on">("off");
+  const [faceMatch, setFaceMatch] = useState<{ staffName: string; action: "in" | "out"; descriptor: number[] } | null>(null);
+  const [faceHint, setFaceHint] = useState<string | null>(null);
+  const faceAuth = useRef<number[] | null>(null);
+  const cooldown = useRef(0);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -32,6 +39,45 @@ export default function Kiosk() {
       .catch(() => setCamera("off"));
     return () => stream?.getTracks().forEach((t) => t.stop());
   }, []);
+  useEffect(() => {
+    if (camera !== "on") return;
+    let alive = true;
+    customFetch<{ staff: number }>("/api/personnel/kiosk/faces-enabled").then(async (r) => {
+      if (!r.staff || !alive) return;
+      setFaceMode("loading");
+      try { await loadFaceApi(); if (alive) setFaceMode("on"); } catch { if (alive) setFaceMode("off"); }
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [camera]);
+  // Look for a face while the kiosk is idle; the person then confirms "it's me".
+  useEffect(() => {
+    if (faceMode !== "on" || result || error || faceMatch || busy || pin) return;
+    let alive = true;
+    (async () => {
+      while (alive) {
+        await new Promise((r) => setTimeout(r, 600));
+        if (!alive || Date.now() < cooldown.current || !video.current) continue;
+        let shot;
+        try { shot = await detectFace(video.current); } catch { continue; }
+        if (!alive) return;
+        if (shot === "many") { setFaceHint("Подходите по одному"); continue; }
+        if (!shot) { setFaceHint(null); continue; }
+        try {
+          const r = await customFetch<{ found: boolean; reason?: string; staffName?: string; action?: "in" | "out" }>("/api/personnel/kiosk/identify", { method: "POST", body: JSON.stringify({ descriptor: shot.descriptor }) });
+          if (!alive) return;
+          if (r.found) { setFaceMatch({ staffName: r.staffName!, action: r.action!, descriptor: shot.descriptor }); setFaceHint(null); return; }
+          setFaceHint("Не узнаю вас — введите PIN"); cooldown.current = Date.now() + 3000;
+        } catch { cooldown.current = Date.now() + 3000; }
+      }
+    })();
+    return () => { alive = false; };
+  }, [faceMode, result, error, faceMatch, busy, pin]);
+  useEffect(() => {
+    if (!faceMatch) return;
+    const t = setTimeout(() => { setFaceMatch(null); cooldown.current = Date.now() + 2000; }, 8000);
+    return () => clearTimeout(t);
+  }, [faceMatch]);
+
   // Result and error screens clear themselves so the next person can check in.
   useEffect(() => {
     if (!result && !error) return;
@@ -50,14 +96,15 @@ export default function Kiosk() {
     return c.toDataURL("image/jpeg", 0.75);
   }, [camera]);
 
-  async function submit(confirm = false) {
-    if (pin.length < 4 || busy) return;
-    setBusy(true); setError(null);
+  async function submit(confirm = false, descriptor: number[] | null = confirm ? faceAuth.current : null) {
+    if ((!descriptor && pin.length < 4) || busy) return;
+    setBusy(true); setError(null); setFaceMatch(null);
+    faceAuth.current = descriptor;
     try {
-      const r = await customFetch<Result>("/api/personnel/kiosk", { method: "POST", body: JSON.stringify({ pin, photo: snapshot(), confirm }) });
+      const r = await customFetch<Result>("/api/personnel/kiosk", { method: "POST", body: JSON.stringify(descriptor ? { descriptor, photo: snapshot(), confirm } : { pin, photo: snapshot(), confirm }) });
       setResult(r);
-      if (r.action !== "confirm") setPin("");
-    } catch (e) { setError(errMsg(e) ?? "Нет связи с сервером"); setPin(""); } finally { setBusy(false); }
+      if (r.action !== "confirm") { setPin(""); faceAuth.current = null; }
+    } catch (e) { setError(errMsg(e) ?? "Нет связи с сервером"); setPin(""); faceAuth.current = null; } finally { setBusy(false); cooldown.current = Date.now() + 4000; }
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -93,11 +140,23 @@ export default function Kiosk() {
           {camera !== "on" && <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-sidebar-foreground/70">
             <CameraOff className="h-8 w-8" />{camera === "wait" ? "Включаем камеру…" : "Камера недоступна — отметка без фото. Разрешите камеру в браузере (нужен адрес https или localhost)."}
           </div>}
-          {camera === "on" && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 p-3 text-center text-sm text-white">Смотрите в камеру — фото сделается при вводе PIN</div>}
+          {camera === "on" && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 p-3 text-center text-sm text-white">
+            {faceMode === "on" ? <span className="inline-flex items-center gap-1.5"><ScanFace className="h-4 w-4" />{faceHint ?? "Подойдите ближе — система узнает вас. Или введите PIN"}</span>
+              : faceMode === "loading" ? "Включаем распознавание лица…" : "Смотрите в камеру — фото сделается при вводе PIN"}</div>}
         </div>
 
         <div className="mx-auto w-full max-w-sm">
-          {result ? (
+          {faceMatch && !result ? (
+            <div className="rounded-3xl bg-white p-6 text-center text-foreground shadow-xl">
+              <UserCheck className="mx-auto h-12 w-12 text-primary" />
+              <div className="mt-3 text-2xl font-semibold">{faceMatch.staffName}</div>
+              <p className="mt-1 text-lg">{faceMatch.action === "in" ? "Отметить приход?" : "Отметить уход?"}</p>
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button type="button" className="h-14 rounded-xl border text-lg font-medium" onClick={() => { setFaceMatch(null); cooldown.current = Date.now() + 5000; setFaceHint("Введите свой PIN"); }}>Это не я</button>
+                <button type="button" disabled={busy} className="h-14 rounded-xl bg-primary text-lg font-medium text-primary-foreground" onClick={() => submit(false, faceMatch.descriptor)}>Да, это я</button>
+              </div>
+            </div>
+          ) : result ? (
             <div className="rounded-3xl bg-white p-6 text-center text-foreground shadow-xl">
               {result.action === "confirm" ? <>
                 <AlertTriangle className="mx-auto h-12 w-12 text-amber-500" />

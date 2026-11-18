@@ -169,6 +169,13 @@
       "when": 1794901359691,
       "tag": "0023_cloudy_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794976207679,
+      "tag": "0024_wild_starhawk",
+      "breakpoints": true
     }
   ]
 }

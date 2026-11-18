@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, boolean, integer, numeric, date, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean, integer, numeric, date, uniqueIndex, real } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -62,3 +62,15 @@ export const attendanceTable = pgTable("attendance", {
 export const insertStaffSchema = createInsertSchema(staffTable).omit({ id: true, createdAt: true });
 export type InsertStaff = z.infer<typeof insertStaffSchema>;
 export type Staff = typeof staffTable.$inferSelect;
+
+/**
+ * Face "fingerprints" (128 numbers from face-api) for kiosk recognition. Only with the employee's
+ * written consent (staff.photoConsentAt); removing consent deletes them.
+ */
+export const staffFacesTable = pgTable("staff_faces", {
+  id: serial("id").primaryKey(),
+  staffId: integer("staff_id").notNull().references(() => staffTable.id, { onDelete: "cascade" }),
+  descriptor: real("descriptor").array().notNull(),
+  createdByClerkId: text("created_by_clerk_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

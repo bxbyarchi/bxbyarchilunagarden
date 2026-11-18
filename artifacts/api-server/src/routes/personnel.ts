@@ -1,9 +1,10 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { createHash } from "node:crypto";
 import { saveDataUrl, readStored, FileError } from "../lib/files";
+import { bestMatch, isDescriptor, consistentSamples } from "../lib/faceMath";
 import { requireAuth } from "../lib/requireAuth";
-import { db, staffTable, staffSchedulesTable, attendanceTable, usersTable, locationsTable } from "@workspace/db";
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import { db, staffTable, staffSchedulesTable, attendanceTable, staffFacesTable, usersTable, locationsTable } from "@workspace/db";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
 import { getWarehouseScope, isWarehouseAdmin, type WarehouseScope } from "../lib/warehouseScope";
 import { logAudit } from "../lib/auditLogger";
 import { summarize, planWindow, addDays, isDate, isTime, type PlanRow, type PresenceRow } from "../lib/timesheet";
@@ -66,6 +67,7 @@ router.get("/personnel/staff", ...route(VIEW, async (req, res, scope) => {
     id: staffTable.id, name: staffTable.name, position: staffTable.position, phone: staffTable.phone, isActive: staffTable.isActive,
     locationId: staffTable.locationId, locationName: locationsTable.name, department: staffTable.department, userClerkId: staffTable.userClerkId,
     hourlyRate: staffTable.hourlyRate, shiftRate: staffTable.shiftRate, hasPin: sql<boolean>`${staffTable.pinHash} IS NOT NULL`,
+    faceSamples: sql<number>`(SELECT count(*)::int FROM ${staffFacesTable} f WHERE f.staff_id = ${staffTable.id})`,
     hireDate: staffTable.hireDate, notes: staffTable.notes, photoConsentAt: staffTable.photoConsentAt,
     accountName: sql<string | null>`NULLIF(concat_ws(' ', ${usersTable.firstName}, ${usersTable.lastName}), '')`, accountLogin: usersTable.email,
     openSince: sql<string | null>`(SELECT a.check_in_at FROM ${attendanceTable} a WHERE a.staff_id = ${staffTable.id} AND a.check_out_at IS NULL)`,
@@ -135,6 +137,8 @@ router.patch("/personnel/staff/:id", ...route(ADMIN, async (req, res, scope) => 
   if (body.photoConsent !== undefined && !!body.photoConsent === !!s.photoConsentAt) delete body.photoConsent;
   const v = await staffValues(body, scope, s.id);
   if (Object.keys(v).length) await db.update(staffTable).set(v).where(eq(staffTable.id, s.id));
+  // Without consent we may not keep biometric data.
+  if (v.photoConsentAt === null || v.isActive === false) await db.delete(staffFacesTable).where(eq(staffFacesTable.staffId, s.id));
   await logAudit({ action: "update", entityType: "staff", entityId: s.id, clerkUserId: scope.userId, details: JSON.stringify({ fields: Object.keys(v).map((k) => (k === "pinHash" ? "pin" : k)) }) });
   res.json({ ok: true });
 }));
@@ -202,7 +206,59 @@ router.post("/personnel/schedule/copy-week", ...route(ADMIN, async (req, res, sc
   res.json({ copied: inserted.length, skipped: values.length - inserted.length });
 }));
 
-// ─── Kiosk: check in / out by PIN with a photo ──────────────────────────────
+// ─── Face enrolment ─────────────────────────────────────────────────────────
+
+router.put("/personnel/staff/:id/faces", ...route(ADMIN, async (req, res, scope) => {
+  const s = await staffInScope(scope, Number(req.params.id));
+  if (!s.photoConsentAt) throw new HttpError(400, "Сначала отметьте письменное согласие сотрудника на фото и распознавание лица");
+  if (!s.isActive) throw new HttpError(400, "Сотрудник уволен");
+  const samples = req.body?.descriptors;
+  if (!Array.isArray(samples) || samples.length < 3 || samples.length > 10 || !samples.every(isDescriptor)) throw new HttpError(400, "Нужно от 3 до 10 снимков лица");
+  if (!consistentSamples(samples)) throw new HttpError(400, "Снимки похожи на разных людей — повторите, чтобы в кадре был только сотрудник");
+  // Someone else's face must not end up on this card.
+  const others = (await db.select({ staffId: staffFacesTable.staffId, descriptor: staffFacesTable.descriptor }).from(staffFacesTable)).filter((f) => f.staffId !== s.id);
+  const clash = bestMatch(samples[0], others);
+  if (clash.staffId != null) {
+    const [o] = await db.select({ name: staffTable.name }).from(staffTable).where(eq(staffTable.id, clash.staffId));
+    throw new HttpError(409, `Это лицо уже зарегистрировано у сотрудника «${o?.name ?? clash.staffId}»`);
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(staffFacesTable).where(eq(staffFacesTable.staffId, s.id));
+    await tx.insert(staffFacesTable).values(samples.map((d: number[]) => ({ staffId: s.id, descriptor: d, createdByClerkId: scope.userId })));
+  });
+  await logAudit({ action: "update", entityType: "staff", entityId: s.id, clerkUserId: scope.userId, details: `Лицо зарегистрировано (${samples.length} снимков)` });
+  res.json({ ok: true, samples: samples.length });
+}));
+
+router.delete("/personnel/staff/:id/faces", ...route(ADMIN, async (req, res, scope) => {
+  const s = await staffInScope(scope, Number(req.params.id));
+  await db.delete(staffFacesTable).where(eq(staffFacesTable.staffId, s.id));
+  await logAudit({ action: "update", entityType: "staff", entityId: s.id, clerkUserId: scope.userId, details: "Лицо удалено" });
+  res.status(204).end();
+}));
+
+async function matchFace(descriptor: unknown) {
+  if (!isDescriptor(descriptor)) throw new HttpError(400, "Неверные данные лица");
+  const enrolled = await db.select({ staffId: staffFacesTable.staffId, descriptor: staffFacesTable.descriptor }).from(staffFacesTable)
+    .innerJoin(staffTable, eq(staffTable.id, staffFacesTable.staffId)).where(and(eq(staffTable.isActive, true), isNotNull(staffTable.photoConsentAt)));
+  return bestMatch(descriptor, enrolled);
+}
+
+router.get("/personnel/kiosk/faces-enabled", ...route(KIOSK, async (_req, res) => {
+  const [{ n }] = await db.select({ n: sql<number>`count(DISTINCT ${staffFacesTable.staffId})::int` }).from(staffFacesTable);
+  res.json({ staff: n });
+}));
+
+/** Who is in front of the camera — no side effects; the kiosk then asks "is it you?". */
+router.post("/personnel/kiosk/identify", ...route(KIOSK, async (req, res) => {
+  const m = await matchFace(req.body?.descriptor);
+  if (m.staffId == null) { res.json({ found: false, reason: m.reason }); return; }
+  const [s] = await db.select({ name: staffTable.name }).from(staffTable).where(eq(staffTable.id, m.staffId));
+  const [open] = await db.select({ id: attendanceTable.id }).from(attendanceTable).where(and(eq(attendanceTable.staffId, m.staffId), isNull(attendanceTable.checkOutAt)));
+  res.json({ found: true, staffName: s.name, action: open ? "out" : "in" });
+}));
+
+// ─── Kiosk: check in / out by face or PIN, with a photo ─────────────────────
 
 const failures = new Map<string, { n: number; until: number }>();
 router.post("/personnel/kiosk", ...route(KIOSK, async (req, res, scope) => {
@@ -210,7 +266,16 @@ router.post("/personnel/kiosk", ...route(KIOSK, async (req, res, scope) => {
   const f = failures.get(key);
   if (f && f.until > Date.now()) throw new HttpError(429, "Слишком много неверных PIN. Подождите минуту.");
   const pin = String(req.body?.pin ?? "");
-  const s = /^\d{4,6}$/.test(pin) ? (await db.select().from(staffTable).where(and(eq(staffTable.pinHash, pinHash(pin)), eq(staffTable.isActive, true))))[0] : undefined;
+  let s: typeof staffTable.$inferSelect | undefined;
+  let method = "kiosk";
+  if (req.body?.descriptor) {
+    // The server matches again: the kiosk's "it's you" is never trusted on its own.
+    const m = await matchFace(req.body.descriptor);
+    if (m.staffId == null) throw new HttpError(404, "Лицо не узнано — введите PIN");
+    [s] = await db.select().from(staffTable).where(and(eq(staffTable.id, m.staffId), eq(staffTable.isActive, true)));
+    method = "face";
+  } else s = /^\d{4,6}$/.test(pin) ? (await db.select().from(staffTable).where(and(eq(staffTable.pinHash, pinHash(pin)), eq(staffTable.isActive, true))))[0] : undefined;
+  if (!s && method === "face") throw new HttpError(404, "Лицо не узнано — введите PIN");
   if (!s) {
     const n = (f && f.until > Date.now() - 120_000 ? f.n : 0) + 1;
     failures.set(key, { n, until: n >= 5 ? Date.now() + 60_000 : Date.now() });
@@ -237,7 +302,7 @@ router.post("/personnel/kiosk", ...route(KIOSK, async (req, res, scope) => {
     const overtimeMin = relevant ? Math.max(0, Math.round((now.getTime() - relevant.end.getTime()) / 60_000)) : 0;
     res.json({ action: "out", staffName: s.name, at: now, since: open.checkInAt, workedMin, overtimeMin, earlyMin: relevant ? Math.max(0, Math.round((relevant.end.getTime() - now.getTime()) / 60_000)) : 0 });
   } else {
-    const [row] = await db.insert(attendanceTable).values({ staffId: s.id, checkInAt: now, checkInPhoto: photo, method: "kiosk" }).returning({ id: attendanceTable.id });
+    const [row] = await db.insert(attendanceTable).values({ staffId: s.id, checkInAt: now, checkInPhoto: photo, method }).returning({ id: attendanceTable.id });
     const lateMin = relevant ? Math.max(0, Math.round((now.getTime() - relevant.start.getTime()) / 60_000)) : 0;
     res.json({ action: "in", id: row.id, staffName: s.name, at: now, plan: relevant && plan ? { startTime: plan.startTime, endTime: plan.endTime } : null, lateMin: lateMin > 5 ? lateMin : 0 });
   }
