@@ -19,6 +19,7 @@ import MoneyRequests from "@/pages/money-requests";
 import Advisor from "@/pages/advisor";
 import Knowledge from "@/pages/knowledge";
 import Training from "@/pages/training";
+import Finance from "@/pages/finance";
 import AuditLog from "@/pages/audit-log";
 import Settings from "@/pages/settings";
 import Rentals from "@/pages/rentals";
@@ -153,6 +154,7 @@ function Routes() {
       <Route path="/advisor"><ProtectedRoute component={Advisor} /></Route>
       <Route path="/knowledge"><ProtectedRoute component={Knowledge} /></Route>
       <Route path="/training"><ProtectedRoute component={Training} /></Route>
+      <Route path="/finance"><ProtectedRoute component={Finance} /></Route>
       <Route path="/audit-log"><ProtectedRoute component={AuditLog} /></Route>
       <Route path="/reports"><RoleProtectedRoute component={Reports} minRole="warehouse_chief" /></Route>
       <Route path="/settings"><ProtectedRoute component={Settings} /></Route>

@@ -38,6 +38,7 @@ import tasksRouter from "./tasks";
 import moneyRouter from "./money";
 import advisorRouter from "./advisor";
 import knowledgeRouter from "./knowledge";
+import financeRouter from "./finance";
 
 const router: IRouter = Router();
 
@@ -68,6 +69,7 @@ router.use(tasksRouter);
 router.use(moneyRouter);
 router.use(advisorRouter);
 router.use(knowledgeRouter);
+router.use(financeRouter);
 router.use(categoriesRouter);
 router.use(itemsRouter);
 router.use(receiptsRouter);

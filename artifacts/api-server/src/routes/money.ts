@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { requireAuth } from "../lib/requireAuth";
-import { db, moneyRequestsTable, moneyRequestEventsTable, staffTable, usersTable, counterpartiesTable, MONEY_KINDS, PAY_METHODS, type EstimateLine, type ReportLine } from "@workspace/db";
+import { db, moneyRequestsTable, moneyRequestEventsTable, staffTable, usersTable, counterpartiesTable, MONEY_KINDS, PAY_METHODS, EXPENSE_CATEGORIES, type EstimateLine, type ReportLine } from "@workspace/db";
 import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { getWarehouseScope, type WarehouseScope } from "../lib/warehouseScope";
 import { logger } from "../lib/logger";
@@ -217,6 +217,7 @@ async function values(b: Record<string, unknown>, c: Ctx, partial: boolean) {
   if (!partial || b.title !== undefined) { const t = String(b.title ?? "").trim(); if (!t) throw new HttpError(400, "Укажите, на что нужны деньги"); v.title = t.slice(0, 200); }
   if (b.purpose !== undefined) v.purpose = b.purpose ? String(b.purpose).trim() : null;
   if (b.department !== undefined) { if (b.department && !DEPARTMENTS.includes(String(b.department))) throw new HttpError(400, "Неизвестный отдел"); v.department = (b.department as string) || null; }
+  if (b.expenseCategory !== undefined) { if (b.expenseCategory && !EXPENSE_CATEGORIES.includes(b.expenseCategory as never)) throw new HttpError(400, "Неизвестная статья расхода"); v.expenseCategory = (b.expenseCategory as string) || null; }
   if (b.neededBy !== undefined) { if (b.neededBy && !isDate(b.neededBy)) throw new HttpError(400, "Неверная дата"); v.neededBy = (b.neededBy as string) || null; }
   if (b.payMethod !== undefined) { if (b.payMethod && !PAY_METHODS.includes(b.payMethod as never)) throw new HttpError(400, "Неверный способ оплаты"); v.payMethod = (b.payMethod as string) || null; }
   if (b.files !== undefined) v.files = files(b.files);
@@ -351,5 +352,16 @@ export async function commentMoney(c: Ctx, req: ReqLike = {}) {
   return (await detail(r.id, c));
 }
 router.post("/money-requests/:id/comments", ...route(async (req, res, c) => { res.status(200).json(await commentMoney(c, req)); }));
+
+/** Managers and accounting may re-file a request under another P&L line at any time. */
+router.post("/money-requests/:id/category", ...route(async (req, res, c) => {
+  if (!APPROVERS.includes(c.role) && !CASHIERS.includes(c.role)) throw new HttpError(403, "Нет доступа");
+  const r = await load(Number(req.params.id), c);
+  const cat = String(req.body?.expenseCategory ?? "");
+  if (!EXPENSE_CATEGORIES.includes(cat as never)) throw new HttpError(400, "Неизвестная статья расхода");
+  await db.update(moneyRequestsTable).set({ expenseCategory: cat }).where(eq(moneyRequestsTable.id, r.id));
+  await event(r.id, c.userId, "edit", "Изменена статья расхода");
+  res.json(await detail(r.id, c));
+}));
 
 export default router;

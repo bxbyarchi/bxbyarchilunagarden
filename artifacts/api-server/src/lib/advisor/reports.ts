@@ -6,6 +6,7 @@
 export interface ReportDef { path: string; about: string; period: boolean; q?: boolean }
 
 export const REPORTS: Record<string, ReportDef> = {
+  pnl: { path: "/reports/pnl", period: true, about: "Доходы и расходы (управленческий P&L): выручка, себестоимость, фудкост, валовая прибыль, списания, зарплата по табелю, прочие расходы по статьям, операционная прибыль; плюс тот же предыдущий период и выручка по дням" },
   sales_margin: { path: "/reports/sales-margin", period: true, about: "Продажи по блюдам и категориям: количество, выручка, себестоимость, маржа, по дням" },
   kassa_summary: { path: "/kassa-analytics/summary", period: true, about: "Кассы: выручка, число чеков, средний чек, наличные/карта, возвраты, по дням и часам" },
   cash_report: { path: "/reports/cash", period: true, about: "Деньги в кассах по сменам: ожидаемые и фактические наличные, расхождения, инкассации" },

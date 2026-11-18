@@ -11,6 +11,8 @@ export const MONEY_KINDS = ["advance", "payment", "reimbursement"] as const;
  */
 export const MONEY_STATUSES = ["pending", "approved", "issued", "reported", "closed", "rejected", "cancelled"] as const;
 export const PAY_METHODS = ["cash", "transfer", "card"] as const;
+/** Where the money goes in the P&L. "goods" = stock purchase: it reaches the P&L through the cost of sales, not here. */
+export const EXPENSE_CATEGORIES = ["goods", "services", "repair", "household", "utilities", "rent", "marketing", "salary", "taxes", "other"] as const;
 
 export type EstimateLine = { name: string; qty: number; unit: string; price: number };
 export type ReportLine = { name: string; amount: number; file: string | null };
@@ -27,6 +29,7 @@ export const moneyRequestsTable = pgTable("money_requests", {
   // Who is paid (payment).
   counterpartyId: integer("counterparty_id").references(() => counterpartiesTable.id, { onDelete: "set null" }),
   department: text("department"),
+  expenseCategory: text("expense_category"),
   estimate: jsonb("estimate").$type<EstimateLine[]>().notNull().default([]),
   amountRequested: numeric("amount_requested", { precision: 12, scale: 2 }).notNull(),
   amountApproved: numeric("amount_approved", { precision: 12, scale: 2 }),

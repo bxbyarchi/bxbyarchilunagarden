@@ -1,0 +1,1 @@
+ALTER TABLE "money_requests" ADD COLUMN "expense_category" text;

@@ -26,7 +26,7 @@ interface Row {
 interface Est { name: string; qty: number; unit: string; price: number }
 interface Rep { name: string; amount: number; file: string | null; url?: string | null }
 interface Detail extends Row {
-  purpose: string | null; estimate: Est[]; files: { file: string; url: string }[]; report: Rep[]; payMethod: string | null; staffPosition: string | null; counterpartyPhone: string | null;
+  purpose: string | null; expenseCategory: string | null; estimate: Est[]; files: { file: string; url: string }[]; report: Rep[]; payMethod: string | null; staffPosition: string | null; counterpartyPhone: string | null;
   approvedByName: string | null; issuedByName: string | null; closedByName: string | null; approvedAt: string | null; issuedAt: string | null; reportedAt: string | null; closedAt: string | null;
   events: { id: number; kind: string; text: string; createdAt: string; authorName: string }[]; actions: Action[]; canEdit: boolean;
 }
@@ -51,6 +51,10 @@ const STATUS: Record<Status, { label: string; cls: string }> = {
 };
 const statusLabel = (r: { status: Status; kind: Kind }) => (r.status === "approved" ? (r.kind === "advance" ? "Ждёт выдачи" : "Ждёт оплаты") : STATUS[r.status].label);
 const METHOD: Record<string, string> = { cash: "Наличными", transfer: "Переводом", card: "Картой" };
+export const EXPENSE: Record<string, string> = {
+  goods: "Товар на склад (продукты, напитки)", services: "Услуги", repair: "Ремонт и обслуживание", household: "Хозяйственные нужды", utilities: "Коммунальные и связь",
+  rent: "Аренда", marketing: "Реклама и мероприятия", salary: "Зарплата и премии вне табеля", taxes: "Налоги и сборы", other: "Прочие расходы",
+};
 const UNITS = ["шт", "кг", "г", "л", "мл", "уп", "пучок", "услуга"];
 
 /** Phone photos are huge: shrink images to ~1600px JPEG before upload; PDFs go as is. */
@@ -104,11 +108,11 @@ function ReportEditor({ lines, setLines }: { lines: Rep[]; setLines: (l: Rep[]) 
   );
 }
 
-type Form = { kind: Kind; title: string; purpose: string; staffId: string; counterpartyId: string; department: string; neededBy: string; payMethod: string; amount: string; estimate: Est[]; report: Rep[]; files: { file: string; url: string }[] };
+type Form = { kind: Kind; title: string; purpose: string; staffId: string; counterpartyId: string; department: string; neededBy: string; payMethod: string; expenseCategory: string; amount: string; estimate: Est[]; report: Rep[]; files: { file: string; url: string }[] };
 
 function NewRequest({ options, onDone, canPickStaff }: { options: Options; onDone: (id: number) => void; canPickStaff: boolean }) {
   const { toast } = useToast();
-  const [f, setF] = useState<Form>({ kind: "advance", title: "", purpose: "", staffId: options.myStaffId ? String(options.myStaffId) : "", counterpartyId: "", department: "", neededBy: "", payMethod: "", amount: "", estimate: [], report: [{ name: "", amount: 0, file: null }], files: [] });
+  const [f, setF] = useState<Form>({ kind: "advance", title: "", purpose: "", staffId: options.myStaffId ? String(options.myStaffId) : "", counterpartyId: "", department: "", neededBy: "", payMethod: "", expenseCategory: "", amount: "", estimate: [], report: [{ name: "", amount: 0, file: null }], files: [] });
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
   const estTotal = f.estimate.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
@@ -117,7 +121,7 @@ function NewRequest({ options, onDone, canPickStaff }: { options: Options; onDon
     setSaving(true);
     try {
       const body = { kind: f.kind, title: f.title, purpose: f.purpose || null, staffId: f.kind === "payment" ? null : f.staffId ? Number(f.staffId) : null, counterpartyId: f.kind === "payment" && f.counterpartyId ? Number(f.counterpartyId) : null,
-        department: f.department || null, neededBy: f.neededBy || null, payMethod: f.payMethod || null, files: f.files.map((x) => x.file),
+        department: f.department || null, neededBy: f.neededBy || null, payMethod: f.payMethod || null, expenseCategory: f.expenseCategory || null, files: f.files.map((x) => x.file),
         ...(f.kind === "reimbursement" ? { report: f.report.map(({ name, amount, file }) => ({ name, amount, file })) } : f.estimate.length ? { estimate: f.estimate } : { amount: Number(f.amount) }) };
       const r = await customFetch<{ id: number }>("/api/money-requests", { method: "POST", body: JSON.stringify(body) });
       toast({ title: `Запрос №${r.id} отправлен на согласование` }); onDone(r.id);
@@ -146,6 +150,9 @@ function NewRequest({ options, onDone, canPickStaff }: { options: Options; onDon
           <Select value={f.department || "none"} onValueChange={(v) => set("department", v === "none" ? "" : v)}><SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="none">Не указан</SelectItem>{Object.entries(DEPARTMENTS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
         {f.kind !== "reimbursement" && <div className="space-y-1.5"><Label>Нужно к</Label><Input type="date" min={todayLocal()} value={f.neededBy} onChange={(e) => set("neededBy", e.target.value)} /></div>}
+        <div className="space-y-1.5"><Label>Статья расхода</Label>
+          <Select value={f.expenseCategory || "none"} onValueChange={(v) => set("expenseCategory", v === "none" ? "" : v)}><SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="none">Не знаю — уточнит бухгалтер</SelectItem>{Object.entries(EXPENSE).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
         <div className="space-y-1.5"><Label>Как удобнее получить</Label>
           <Select value={f.payMethod || "none"} onValueChange={(v) => set("payMethod", v === "none" ? "" : v)}><SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="none">Не важно</SelectItem>{Object.entries(METHOD).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
@@ -188,6 +195,8 @@ function NewRequest({ options, onDone, canPickStaff }: { options: Options; onDon
 }
 
 function RequestDialog({ id, onChanged }: { id: number; onChanged: () => void }) {
+  const { user } = useCurrentUser();
+  const canFile = ["super_admin", "warehouse_chief", "manager", "location_admin", "accountant"].includes(user?.role ?? "");
   const { toast } = useToast();
   const qc = useQueryClient();
   const key = ["/api/money-requests", id];
@@ -232,6 +241,10 @@ function RequestDialog({ id, onChanged }: { id: number; onChanged: () => void })
         {r.neededBy && <div><span className="text-muted-foreground">Нужно к: </span>{new Date(r.neededBy).toLocaleDateString("ru-RU")}</div>}
         {r.reportDueAt && r.status === "issued" && <div><span className="text-muted-foreground">Отчитаться до: </span>{new Date(r.reportDueAt).toLocaleDateString("ru-RU")}</div>}
         {r.department && <div><span className="text-muted-foreground">Отдел: </span>{DEPARTMENTS[r.department]}</div>}
+        <div className="flex items-center gap-1.5 sm:col-span-2"><span className="text-muted-foreground">Статья: </span>
+          {canFile ? <Select value={r.expenseCategory ?? "none"} onValueChange={(v) => v !== "none" && post("/category", { expenseCategory: v })}><SelectTrigger className="h-7 w-80"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="none" disabled>Не указана</SelectItem>{Object.entries(EXPENSE).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select>
+            : <span>{r.expenseCategory ? EXPENSE[r.expenseCategory] : "не указана"}</span>}</div>
       </div>
       {r.purpose && <p className="whitespace-pre-wrap text-sm">{r.purpose}</p>}
 
