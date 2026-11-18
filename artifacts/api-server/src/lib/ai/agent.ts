@@ -112,17 +112,19 @@ function serialize<T>(id: number, fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export interface AgentReply { reply: string | null; messageId: number | null; handledBy: "ai" | "human" | "off" }
+export interface AgentReply { reply: string | null; messageId: number | null; handledBy: "ai" | "human" | "off" | "duplicate" }
 
 /**
  * Stores the guest's message and, unless a human has taken over or the agent
  * is off, produces and stores the AI reply.
  */
-export async function handleGuestMessage(conversationId: number, text: string): Promise<AgentReply> {
+export async function handleGuestMessage(conversationId: number, text: string, opts: { externalId?: string } = {}): Promise<AgentReply> {
   return serialize(conversationId, async () => {
     const clean = text.trim().slice(0, 4000);
     if (!clean) return { reply: null, messageId: null, handledBy: "off" as const };
-    await db.insert(aiMessagesTable).values({ conversationId, role: "guest", text: clean });
+    // Meta re-sends webhooks it thinks were not received; the message id makes that harmless.
+    const [stored] = await db.insert(aiMessagesTable).values({ conversationId, role: "guest", text: clean, externalId: opts.externalId ?? null }).onConflictDoNothing().returning({ id: aiMessagesTable.id });
+    if (!stored) return { reply: null, messageId: null, handledBy: "duplicate" as const };
     await db.update(aiConversationsTable).set({ lastMessageAt: new Date(), ...(clean ? {} : {}) }).where(eq(aiConversationsTable.id, conversationId));
     const conv = (await db.query.aiConversationsTable.findFirst({ where: eq(aiConversationsTable.id, conversationId) }))!;
     const settings = await getSettings();

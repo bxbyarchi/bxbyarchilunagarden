@@ -41,6 +41,8 @@ app.use(
 app.use(helmetMiddleware);
 app.use(corsMiddleware);
 // Check-in photos from the kiosk are larger than the default 100 KB body limit.
+// Meta webhooks: keep the raw bytes — the signature is computed over them.
+app.use("/api/channels/meta/webhook", express.raw({ type: "*/*", limit: "2mb" }));
 app.use("/api/personnel/kiosk", express.json({ limit: "2mb" }));
 // Invoices and receipt photos (up to 4 MB as base64).
 app.use("/api/money-requests/files", express.json({ limit: "6mb" }));

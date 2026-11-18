@@ -14,6 +14,7 @@ import { Bot, AlertTriangle, MessageSquarePlus, Send, UserCheck, RotateCcw, Chec
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import AccessDenied from "@/components/AccessDenied";
+import ChannelsCard from "@/components/ChannelsCard";
 import { fmtPhone, STATUS as BOOKING_STATUS } from "./bookings";
 
 interface ConvRow {
@@ -22,7 +23,7 @@ interface ConvRow {
   guestId: number | null; guestName: string | null; guestPhone: string | null; last: string | null; lastRole: string | null;
   stats: { messages: number; errors: number; cost: number };
 }
-interface Msg { id: number; role: "guest" | "ai" | "staff" | "note"; text: string; actions: { tool: string; input: unknown; ok: boolean; result: string }[] | null; error: string | null; model: string | null; costUsd: number | null; authorName: string | null; createdAt: string }
+interface Msg { id: number; role: "guest" | "ai" | "staff" | "note"; text: string; actions: { tool: string; input: unknown; ok: boolean; result: string }[] | null; error: string | null; deliveryError: string | null; model: string | null; costUsd: number | null; authorName: string | null; createdAt: string }
 interface ConvDetail extends Omit<ConvRow, "guestName" | "guestPhone" | "last" | "lastRole" | "stats"> {
   messages: Msg[];
   guest: { id: number; name: string; phone: string | null; isVip: boolean; notes: string | null; tags: string[] } | null;
@@ -77,7 +78,8 @@ function Conversation({ id, onChanged }: { id: number; onChanged: () => void }) 
     if (!text.trim()) return;
     setSending(true);
     try {
-      await customFetch(`/api/ai/conversations/${id}/${asGuest ? "guest-message" : "staff-reply"}`, { method: "POST", body: JSON.stringify({ text }) });
+      const r = await customFetch<{ delivered?: boolean; error?: string | null }>(`/api/ai/conversations/${id}/${asGuest ? "guest-message" : "staff-reply"}`, { method: "POST", body: JSON.stringify({ text }) });
+      if (!asGuest && r?.delivered === false) toast({ title: "Сообщение сохранено, но не доставлено гостю", description: r.error ?? undefined, variant: "destructive" });
       setText(""); await qc.invalidateQueries({ queryKey: key }); onChanged();
     } catch (e) { toast({ title: "Не отправлено", description: errMsg(e), variant: "destructive" }); } finally { setSending(false); }
   }
@@ -119,6 +121,7 @@ function Conversation({ id, onChanged }: { id: number; onChanged: () => void }) 
                 </div>
                 <div className="whitespace-pre-wrap">{m.text}</div>
                 {m.error && <div className="mt-1.5 rounded bg-red-100 px-2 py-1 text-xs text-red-800"><b>Ошибка:</b> {m.error}</div>}
+                {m.deliveryError && <div className="mt-1.5 rounded bg-amber-100 px-2 py-1 text-xs text-amber-900"><b>Не доставлено гостю:</b> {m.deliveryError}</div>}
                 <ActionChips actions={m.actions} />
               </div>
             </div>
@@ -180,6 +183,7 @@ function SettingsForm() {
   );
   return (
     <div className="space-y-4 max-w-3xl">
+      <ChannelsCard />
       {!s?.apiKeyConfigured && <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />Ключ Anthropic API не задан на сервере (переменная ANTHROPIC_API_KEY в .env) — агент отвечает гостям только «передал менеджеру».</div>}
       <Card><CardContent className="space-y-4 pt-6">
         <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={f.enabled} onChange={(e) => set("enabled", e.target.checked)} disabled={!canEdit} />Агент включён (если выключить — сообщения копятся для менеджеров)</label>

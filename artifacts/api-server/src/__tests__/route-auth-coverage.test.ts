@@ -25,6 +25,10 @@ const PUBLIC_ROUTES: Array<{ method: string; path: string }> = [
   { method: "GET", path: "/auth/status" },
   { method: "POST", path: "/auth/setup" },
   { method: "POST", path: "/auth/login" },
+  // Meta (WhatsApp/Instagram) webhook: Meta can't log in. GET answers only with the right verify token,
+  // POST is accepted only with a valid X-Hub-Signature-256 (HMAC of the body with META_APP_SECRET).
+  { method: "GET", path: "/channels/meta/webhook" },
+  { method: "POST", path: "/channels/meta/webhook" },
 ];
 
 // Path prefixes that are public by design (see storage.ts: public-objects is
@@ -102,5 +106,17 @@ describe("a forged or unknown session cookie never authenticates", () => {
   it("GET /api/auth/me with a garbage lg_session cookie -> 401", async () => {
     const res = await request(app).get("/api/auth/me").set("Cookie", "lg_session=not-a-real-token");
     expect(res.status).toBe(401);
+  });
+});
+
+describe("Meta webhook is public but not open", () => {
+  it("refuses verification with a wrong token and unsigned messages", async () => {
+    const prev = process.env.META_VERIFY_TOKEN, prevSecret = process.env.META_APP_SECRET;
+    process.env.META_VERIFY_TOKEN = "right"; process.env.META_APP_SECRET = "secret";
+    try {
+      expect((await request(app).get("/api/channels/meta/webhook?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1")).status).toBe(403);
+      expect((await request(app).get("/api/channels/meta/webhook?hub.mode=subscribe&hub.verify_token=right&hub.challenge=42")).text).toBe("42");
+      expect((await request(app).post("/api/channels/meta/webhook").set("content-type", "application/json").send({ object: "instagram", entry: [] })).status).toBe(401);
+    } finally { process.env.META_VERIFY_TOKEN = prev; process.env.META_APP_SECRET = prevSecret; }
   });
 });

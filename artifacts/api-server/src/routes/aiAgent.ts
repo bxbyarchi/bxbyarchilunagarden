@@ -6,6 +6,7 @@ import { and, desc, eq, gte, isNotNull, sql, type SQL } from "drizzle-orm";
 import { getWarehouseScope } from "../lib/warehouseScope";
 import { logAudit } from "../lib/auditLogger";
 import { handleGuestMessage, findOrCreateConversation, getSettings, conversationsTail } from "../lib/ai/agent";
+import { deliverStaffReply } from "../lib/channels/inbox";
 import { GUEST_MODELS, DEFAULT_GUEST_MODEL, CLAUDE_MODELS, availableModels, hasAnthropic, hasOpenRouter } from "../lib/llm/catalog";
 
 const router: IRouter = Router();
@@ -93,10 +94,9 @@ router.post("/ai/conversations/:id/staff-reply", ...view, handle(async (req, res
   const c = await conv(Number(req.params.id));
   const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 4000) : "";
   if (!text) throw new HttpError(400, "Пустое сообщение");
-  await db.insert(aiMessagesTable).values({ conversationId: c.id, role: "staff", text, authorClerkId: req.auth?.userId ?? null });
-  await db.update(aiConversationsTable).set({ status: "human", lastMessageAt: new Date() }).where(eq(aiConversationsTable.id, c.id));
-  // Delivery to WhatsApp / Instagram is added with the channel adapters.
-  res.json({ ok: true, delivered: c.channel === "test" });
+  // Goes out to the guest's WhatsApp / Instagram; a failure (e.g. WhatsApp's 24-hour window) is shown to the manager.
+  const r = await deliverStaffReply(c.id, text, req.auth?.userId ?? null);
+  res.json({ ok: true, delivered: r.delivered, error: r.error });
 }));
 
 router.post("/ai/conversations/:id/status", ...view, handle(async (req, res) => {

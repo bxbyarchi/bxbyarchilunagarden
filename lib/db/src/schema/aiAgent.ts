@@ -43,8 +43,13 @@ export const aiMessagesTable = pgTable("ai_messages", {
   outputTokens: integer("output_tokens"),
   costUsd: numeric("cost_usd", { precision: 10, scale: 5 }),
   authorClerkId: text("author_clerk_id"),         // для staff
+  // Message id in WhatsApp/Instagram: incoming — to ignore Meta's retries; outgoing — what was delivered.
+  externalId: text("external_id"),
+  // Outgoing message could not be delivered to the channel (e.g. WhatsApp 24-hour window closed).
+  deliveryError: text("delivery_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
+  extIdx: uniqueIndex("ai_messages_external_uq").on(t.conversationId, t.externalId).where(sql`${t.externalId} IS NOT NULL`),
   roleCheck: check("ai_messages_role_ck", sql`${t.role} in ('guest', 'ai', 'staff', 'note')`),
   convIdx: index("ai_messages_conv_idx").on(t.conversationId, t.createdAt),
   errorIdx: index("ai_messages_error_idx").on(t.createdAt).where(sql`${t.error} IS NOT NULL`),
